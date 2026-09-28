@@ -1,4 +1,4 @@
-import * as maplibregl from "https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs";
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs';
 
 const eventsContainer = document.getElementById('events');
 const detailsContainer = document.getElementById('details');
@@ -6,18 +6,24 @@ const searchInput = document.getElementById('search');
 
 let allEvents = [];
 let map;
+let geolocate;
 
 function initializeMap() {
+
     map = new maplibregl.Map({
         container: 'map',
+
         style: {
             version: 8,
             sources: {
                 osm: {
                     type: 'raster',
-                    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                    tiles: [
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                    ],
                     tileSize: 256,
-                    attribution: "© OpenStreetMap contributors"
+                    attribution:
+                        '© OpenStreetMap contributors'
                 }
             },
             layers: [
@@ -33,8 +39,18 @@ function initializeMap() {
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.on('load', () => {
-        loadZoningApplications();
+    geolocate = new maplibregl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+        showUserLocation: true,
+        showAccuracyCircle: true
+    });
+    map.addControl(geolocate, "top-right");
+
+    map.on("load", () => {
+        loadEvents();
     });
 }
 
@@ -172,27 +188,111 @@ function showZoningDetails(properties) {
     `;
 }
 
-function addMarkers(events) {
+function addEventMarkers(events) {
     for (const event of events) {
+        if (event.latitude === null || event.longitude === null) {
+            continue;
+        }
+
         const marker = new maplibregl.Marker().setLngLat([event.longitude, event.latitude]).addTo(map);
 
-        marker.getElement().addEventListener('click', () => {
+        marker.getElement().addEventListener("click", () => {
             showDetails(event);
+
+            map.flyTo({center: [event.longitude, event.latitude], zoom: 14});
         });
     }
 }
 
-async function loadEvents() {
-    const response = await fetch('/api/events');
+function addEventGeometry(events) {
+    const features = events.filter(event => event.geometry !== null).map(event => ({
+        type: 'Feature',
+        geometry: event.geometry,
+        properties: {
+            id: event.id,
+            title: event.title,
+            category: event.category,
+            description: event.description,
+            status: event.status,
+            location: event.location,
+            sourceName: event.source_name,
+            sourceUrl: event.source_url
+        }
+    }));
 
-    if (!response.ok) {
-        throw new Error(`Failed to load events: ${response.status}`);
+    if (features.length === 0) {
+        return;
     }
 
-    allEvents = await response.json();
+    map.addSource('event-geometry', {
+        type: 'geojson',
+        data: {
+            type: 'FeatureCollection',
+            features
+        }
+    });
 
-    renderEvents(allEvents);
-    addMarkers(allEvents);
+    map.addLayer({
+        id: 'event-geometry-fill',
+        type: 'fill',
+        source: 'event-geometry',
+        paint: {
+            'fill-color': '#F4991A',
+
+            'fill-opacity': 0.20
+        }
+    });
+
+    map.addLayer({
+        id: 'event-geometry-outline',
+        type: 'line',
+        source: 'event-geometry',
+        paint: {
+            "line-color": '#F4991A',
+            "line-width": 2
+        }
+    });
+
+    map.on('click', 'event-geometry-fill', event => {
+        const properties = event.features[0].properties;
+        const matchingEvent = allEvents.find(item => item.id === properties.id);
+
+        if (matchingEvent) {
+            showDetails(matchingEvent);
+        }
+    });
+
+    map.on('mouseenter', 'event-geometry-fill', () => {
+        map.getCanvas().style.cursor =
+            "pointer";
+
+    });
+
+    map.on('mouseleave', 'event-geometry-fill', () => {
+        map.getCanvas().style.cursor =
+            "";
+    });
+}
+
+async function loadEvents() {
+    try {
+        const response = await fetch('/api/events');
+
+        if (!response.ok) {
+            throw new Error(
+                `Failed to load events: ${response.status}`
+            );
+        }
+
+        allEvents = await response.json();
+
+        renderEvents(allEvents);
+        addEventMarkers(allEvents);
+        addEventGeometry(allEvents);
+
+    } catch (error) {
+        console.error('Failed to load events: ', error);
+    }
 }
 
 function renderEvents(events) {
@@ -239,7 +339,6 @@ function renderEvents(events) {
         eventsContainer.appendChild(element);
     }
 }
-
 function showDetails(event) {
     detailsContainer.innerHTML = `
         <div class="details-category">
@@ -248,32 +347,71 @@ function showDetails(event) {
 
         <h2>${event.title}</h2>
 
-        <div class="details-status">
-            ${event.status}
-        </div>
+        <div class="details-status">${event.status}</div>
 
-        <p>
-            ${event.description}
-        </p>
+        <p>${event.description}</p>
 
         <div class="details-section">
             <div class="details-label">LOCATION</div>
+
             <div>${event.location}</div>
         </div>
 
-        <div class="details-section">
-            <div class="details-label">DATE</div>
-            <div>${event.date}</div>
-        </div>
+        ${
+            event.date
+                ? `
+                    <div class="details-section">
 
-        <div class="details-section">
-            <div class="details-label">COORDINATES</div>
-            <div>
-                ${event.latitude.toFixed(5)},
-                ${event.longitude.toFixed(5)}
-            </div>
-        </div>
-    `
+                        <div class="details-label">
+                            DATE
+                        </div>
+
+                        <div>
+                            ${event.date}
+                        </div>
+
+                    </div>
+                `
+                : ""
+        }
+
+        ${
+            event.source_name
+                ? `
+                    <div class="details-section">
+
+                        <div class="details-label">
+                            SOURCE
+                        </div>
+
+                        <div>
+                            ${event.source_name}
+                        </div>
+
+                    </div>
+                `
+                : ""
+        }
+
+        ${
+            event.source_url
+                ? `
+                    <div class="details-section">
+
+                        <a
+                            href="${event.source_url}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            View official source →
+                        </a>
+
+                    </div>
+                `
+                : ""
+        }
+
+    `;
 }
 
 searchInput.addEventListener('input', () => {
