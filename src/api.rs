@@ -34,9 +34,9 @@ async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, Str
     let mut events = Vec::new();
 
     for (index, feature) in features.iter().enumerate() {
-        let properties = feature.get("properties".and_then(Value::as_object));
+        let properties = feature.get("properties").and_then(Value::as_object);
 
-        let geometry = features.get("geometry").cloned();
+        let geometry = feature.get("geometry").cloned();
 
         let properties = match properties {
             Some(properties) => properties,
@@ -46,6 +46,7 @@ async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, Str
         let number = properties.get("ZANUMBER").and_then(Value::as_str).unwrap_or("Unknown Application");
         let status = properties.get("ZASTATUS").and_then(Value::as_str).unwrap_or("Unknown");
         let process = properties.get("PROCESS").and_then(Value::as_str).unwrap_or("");
+        let comments = properties.get("COMMENTS").and_then(Value::as_str).unwrap_or("");
         let link = properties.get("LINK").and_then(Value::as_str).map(String::from);
 
         let description = if !comments.is_empty() {
@@ -62,7 +63,7 @@ async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, Str
             category: "development".to_string(),
             description,
             latitude: None,
-            longitude: none,
+            longitude: None,
             location: "Forsyth County, Georgia".to_string(),
             status: status.to_string(),
             date: String::new(),
