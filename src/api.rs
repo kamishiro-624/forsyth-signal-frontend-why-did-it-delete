@@ -13,9 +13,11 @@ pub async fn get_events() -> Result<Json<Vec<Event>>, (axum::http::StatusCode, S
 }
 
 fn load_local_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
-    let file = std::fs::read_to_string("data/events.json").map_err(|error| {(axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read events.json: {error}"),)})?;
 
-    serde_json::from_str(&file).map_err(|error| {(axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse events.json: {error}"),)})
+    let file = std::fs::read_to_string("data/events.json").map_err(|error| {(axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read data/events.json: {error}"),)})?;
+
+    serde_json::from_str(&file).map_err(|error| {(axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse data/events.json: {error}"),)})
+
 }
 
 async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
@@ -27,9 +29,15 @@ async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, Str
         return Err((axum::http::StatusCode::BAD_GATEWAY, format!("Forsyth County GIS returned status {}", response.status()),));
     }
 
-    let data: Value = response.json().await.map_err(|error| {(axum::http::StatusCode::BAD_GATEWAY, format!("Invalid GeoJSON from Forsyth County GIS: {error}"),)})?;
+    let data: Value = response.json().await.map_err(|error| {(axum::http::StatusCode::BAD_GATEWAY, format!("Invalid response from Forsyth County GIS: {error}"),)})?;
 
-    let features = data.get("features").and_then(Value::as_array).ok_or_else(|| {(axum::http::StatusCode::BAD_GATEWAY, "Forsyth County GIS returned no features".to_string(),)})?;
+    if let Some(error) = data.get("error") {
+
+        return Err((axum::http::StatusCode::BAD_GATEWAY, format!("Forsyth County GIS returned an error: {error}"),));
+
+    }
+
+    let features = data.get("features").and_then(Value::as_array).ok_or_else(|| {(axum::http::StatusCode::BAD_GATEWAY, "Forsyth County GIS response did not contain any features.".to_string(),)})?;
 
     let mut events = Vec::new();
 
@@ -58,7 +66,9 @@ async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, Str
         };
 
         events.push(Event {
-            id: format!("zoning-{index}"),
+
+            id: format!("zoning-{number}-{index}"),
+
             title: format!("Zoning Application {number}"),
             category: "development".to_string(),
             description,

@@ -15,7 +15,7 @@
     <header class="topbar">
         <div class="logo">FORSYTH <span>SIGNAL</span></div>
 
-        <input id="search" type="search" placeholder="Search Forsyth County...">
+        <input id="search" type="search" placeholder="Search for an event...">
     </header>
 
     <main>
@@ -27,7 +27,13 @@
         </aside>
 
         <!-- todo :3 -->
-        <section id="map">MAP</section>
+        <section id="map">
+            <div id="map-search">
+                <input id="location-search" type="search" placeholder="Search for a location..." autocomplete="off">
+                <div id="location-results"></div>
+            </div>
+
+        </section>
 
         <aside id="details">
             <div class="empty">

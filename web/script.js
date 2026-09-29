@@ -3,13 +3,15 @@ import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-
 const eventsContainer = document.getElementById('events');
 const detailsContainer = document.getElementById('details');
 const searchInput = document.getElementById('search');
+const locationSearch = document.getElementById('location-search');
+const locationResults = document.getElementById('location-results');
 
 let allEvents = [];
 let map;
 let geolocate;
+let searchTimeout;
 
 function initializeMap() {
-
     map = new maplibregl.Map({
         container: 'map',
 
@@ -18,12 +20,9 @@ function initializeMap() {
             sources: {
                 osm: {
                     type: 'raster',
-                    tiles: [
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-                    ],
+                    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
                     tileSize: 256,
-                    attribution:
-                        '© OpenStreetMap contributors'
+                    attribution: '© OpenStreetMap contributors'
                 }
             },
             layers: [
@@ -39,11 +38,12 @@ function initializeMap() {
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
     geolocate = new maplibregl.GeolocateControl({
         positionOptions: {
             enableHighAccuracy: true
         },
-        trackUserLocation: true,
+        trackUserLocation: false,
         showUserLocation: true,
         showAccuracyCircle: true
     });
@@ -224,12 +224,19 @@ function addEventGeometry(events) {
         return;
     }
 
+    const geojson = {
+        type: 'FeatureCollection',
+        features
+    };
+
+    if (map.getSource('event-geometry')) {
+        map.getSource('event-geometry').setData(geojson);
+        return;
+    }
+
     map.addSource('event-geometry', {
         type: 'geojson',
-        data: {
-            type: 'FeatureCollection',
-            features
-        }
+        data: geojson
     });
 
     map.addLayer({
@@ -279,20 +286,19 @@ async function loadEvents() {
         const response = await fetch('/api/events');
 
         if (!response.ok) {
-            throw new Error(
-                `Failed to load events: ${response.status}`
-            );
+            throw new Error(`API returned: ${response.status}`);
         }
 
         allEvents = await response.json();
 
-        renderEvents(allEvents);
-        addEventMarkers(allEvents);
-        addEventGeometry(allEvents);
-
     } catch (error) {
         console.error('Failed to load events: ', error);
+        return;
     }
+
+    renderEvents(allEvents);
+    addEventMarkers(allEvents);
+    addEventGeometry(allEvents);
 }
 
 function renderEvents(events) {
@@ -414,6 +420,59 @@ function showDetails(event) {
     `;
 }
 
+async function searchLocation(query) {
+    try {
+        const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=us&q=' + encodeURIComponent(query);
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Location search failed: ${response.status}`);
+        }
+
+        const results = await response.json();
+        renderLocationResults(results);
+    } catch (error) {
+        console.error('Location search failed: ', error);
+
+        locationResults.innerHTML = `
+            <div class="location-result">Search failed :( </div>
+        `
+    }
+}
+
+function renderLocationResults(results) {
+    locationResults.innerHTML = '';
+    if (results.length === 0) {
+        locationResults.innerHTML = `
+            <div class="location-result">No locations found</div>
+        `;
+        return;
+    }
+
+    for (const result of results) {
+        const element = document.createElement('div');
+        element.className = 'location-result';
+        element.innerHTML = `
+            <div class="location-result-name">${result.display_name}</div>
+            <div class="location-result-type">${result.type || "location"}</div>
+        `;
+        element.addEventListener('click', () => {
+            const longitude = Number(result.lon);
+            const latitude = Number(result.lat);
+
+            map.flyTo({
+                center: [longitude, latitude],
+                zoom: 15
+            });
+            locationSearch.value = result.display_name;
+            locationResults.innerHTML = '';
+        });
+
+        locationResults.appendChild(element);
+    }
+}
+
 searchInput.addEventListener('input', () => {
     const query = searchInput.value.toLowerCase().trim();
 
@@ -425,6 +484,20 @@ searchInput.addEventListener('input', () => {
     );
 
     renderEvents(filteredEvents);
+});
+
+locationSearch.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    const query = locationSearch.value.trim();
+
+    if (query.length < 3) {
+        locationResults.innerHTML = "";
+        return;
+    }
+
+    searchTimeout = setTimeout(() => {
+        searchLocation(query);
+    }, 400);
 });
 
 initializeMap();
