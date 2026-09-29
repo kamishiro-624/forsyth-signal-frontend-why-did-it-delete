@@ -75,17 +75,3 @@ async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, Str
 
     Ok(events)
 }
-
-pub async fn get_zoning() -> Result<Json<Value>, (axum::http::StatusCode, String)> {
-    let client = reqwest::Client::new();
-
-    let response = client.get(ZONING_URL).query(&[("where", "1=1"), ("outFields", "*"), ("returnGeometry", "true"), ("outSR", "4326"), ("f", "geojson"),]).send().await.map_err(|error| {(axum::http::StatusCode::BAD_GATEWAY, format!("Failed to contact Forsyth County GIS: {error}"),)})?;
-
-    if !response.status().is_success() {
-        return Err((axum::http::StatusCode::BAD_GATEWAY, format!("Forsyth County GIS returned status {}", response.status()),));
-    }
-
-    let data: Value = response.json().await.map_err(|error| {(axum::http::StatusCode::BAD_GATEWAY, format!("Invalid GeoJSON from Forsyth County GIS: {error}"),)})?;
-
-    Ok(Json(data))
-}
