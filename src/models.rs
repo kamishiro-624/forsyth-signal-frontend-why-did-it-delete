@@ -21,4 +21,3 @@ pub struct Event {
     #[serde(default)]
     pub geometry: Option<Value>,
 }
-

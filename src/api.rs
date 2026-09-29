@@ -1,87 +1,65 @@
 use axum::Json;
+use reqwest::Client;
 use serde_json::Value;
 
 use crate::models::Event;
+use crate::sources::{arcgis,meetings,};
 
 const ZONING_URL: &str = "https://geo.forsythco.com/gisworkflow/rest/services/Public/Zoning_Applications/FeatureServer/0/query";
+const INSIGHT_URL: &str = "https://geo.forsythco.com/gis3/rest/services/Public/Insight2Forsyth/FeatureServer";
+const SCHOOLS_URL: &str = "https://services2.arcgis.com/StQaZGYzUARPnrpL/ArcGIS/rest/services/Public_School/FeatureServer/0/query";
+const PARKS_URL: &str = "https://services2.arcgis.com/StQaZGYzUARPnrpL/ArcGIS/rest/services/Park_Facility/FeatureServer/0/query";
+const ZONING_DISTRICTS_URL: &str = "https://geo.forsythco.com/gisworkflow/rest/services/Public/Zoning_Districts/FeatureServer/0/query";
 
 pub async fn get_events() -> Result<Json<Vec<Event>>, (axum::http::StatusCode, String)> {
+    let client = Client::new();
     let mut events = load_local_events()?;
-    let zoning_events = load_zoning_events().await?;
-    events.extend(zoning_events);
+
+    add_source(&mut events, arcgis::load_events(&client, ZONING_URL, "development", "ZANUMBER", &["COMMENTS", "PROCESS"], &["ZASTATUS"], &[], &["LOCATION", "ADDRESS"], "Forsyth County GIS", "Zoning Application",).await,)?;
+    add_source(&mut events, arcgis::load_events(&client, &format!("{INSIGHT_URL}/0/query"), "development", "ProjectName", &["PlanType", "PlanWorkClass"], &["PlanStatus", "SubmittalStatus"], &["CompletionDate", "ApplicationDate", "LastChangedDate"], &["Address", "LOCATION", "ProjectName"], "Forsyth County Planning & Community Development", "Planning Hearing",).await,)?;
+    add_source(&mut events, arcgis::load_events(&client, &format!("{INSIGHT_URL}/1/query"), "development", "ProjectName", &["PlanType", "PlanWorkClass"], &["PlanStatus", "SubmittalStatus"], &["ApplicationDate", "LastChangedDate", "CompletionDate"], &["Address", "LOCATION", "ProjectName"], "Forsyth County Planning & Community Development", "New Permit",).await,)?;
+    add_source(&mut events, arcgis::load_events(&client, &format!("{INSIGHT_URL}/2/query"), "development", "ProjectName", &["PlanType", "PlanWorkClass", "COMMENTS"], &["PlanStatus", "SubmittalStatus"], &["ApplicationDate", "LastChangedDate", "CompletionDate"], &["Address", "LOCATION", "ProjectName"], "Forsyth County Planning & Community Development", "Zoning Application",).await,)?;
+    add_source(&mut events, arcgis::load_events(&client, &format!("{INSIGHT_URL}/3/query"), "public-notice", "ProjectName", &["PlanType", "PlanWorkClass"], &["PlanStatus", "SubmittalStatus"], &["ApplicationDate", "LastChangedDate"], &["Address", "LOCATION", "ProjectName"], "Forsyth County Planning & Community Development", "Public Participation Sign",).await,)?;
+    add_source(&mut events, arcgis::load_events(&client, &format!("{INSIGHT_URL}/4/query"), "public-notice", "ProjectName", &["PlanType", "PlanWorkClass"], &["PlanStatus", "SubmittalStatus"], &["ApplicationDate", "LastChangedDate"], &["Address", "LOCATION", "ProjectName"], "Forsyth County Planning & Community Development", "Hearing Sign",).await,)?;
+
+    events.extend(meetings::load_meetings());
+
+    add_source(&mut events, arcgis::load_events(&client, SCHOOLS_URL, "schools", "SCH_NAME", &["TYPE", "GRDRANGE"], &["STATE"], &["YEAR_OPEN"], &["ADDRESS", "CITY", "ZIP"], "Forsyth County Schools GIS", "School",).await,)?;
+
     Ok(Json(events))
 }
 
-fn load_local_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
+pub async fn get_layers() -> Result<Json<Value>, (axum::http::StatusCode, String)> {
+    let client = Client::new();
 
-    let file = std::fs::read_to_string("data/events.json").map_err(|error| {(axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read data/events.json: {error}"),)})?;
+    let schools = arcgis::load_geojson(&client, SCHOOLS_URL, "Forsyth County Schools GIS",).await.map_err(bad_gateway)?;
+    let parks = arcgis::load_geojson(&client, PARKS_URL, "Forsyth County Parks & Recreation GIS",).await.map_err(bad_gateway)?;
 
-    serde_json::from_str(&file).map_err(|error| {(axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse data/events.json: {error}"),)})
+    let zoning = arcgis::load_geojson(&client, ZONING_DISTRICTS_URL, "Forsyth County GIS",).await.map_err(bad_gateway)?;
 
+    Ok(Json(serde_json::json!({"schools": schools, "parks": parks, "zoning": zoning})))
 }
 
-async fn load_zoning_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
-    let client = reqwest::Client::new();
+fn load_local_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
+    let file = std::fs::read_to_string("data/events.json").map_err(|error| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read data/events.json: {error}"),))?;
 
-    let response = client.get(ZONING_URL).query(&[("where", "1=1"), ("outFields", "*"), ("returnGeometry", "true"), ("outSR", "4326"), ("f", "geojson"),]).send().await.map_err(|error| {(axum::http::StatusCode::BAD_GATEWAY, format!("Failed to contact Forsyth County GIS: {error}"),)})?;
+    serde_json::from_str(&file).map_err(|error| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse data/events.json: {error}"),))
+}
 
-    if !response.status().is_success() {
-        return Err((axum::http::StatusCode::BAD_GATEWAY, format!("Forsyth County GIS returned status {}", response.status()),));
+fn add_source(events: &mut Vec<Event>, result: Result<Vec<Event>, String>,) -> Result<(), (axum::http::StatusCode, String)> {
+    match result {
+        Ok(mut source_events) => {
+            events.append(&mut source_events);
+            Ok(())
+        }
+
+        Err(error) => Err(bad_gateway(error)),
     }
+}
 
-    let data: Value = response.json().await.map_err(|error| {(axum::http::StatusCode::BAD_GATEWAY, format!("Invalid response from Forsyth County GIS: {error}"),)})?;
-
-    if let Some(error) = data.get("error") {
-
-        return Err((axum::http::StatusCode::BAD_GATEWAY, format!("Forsyth County GIS returned an error: {error}"),));
-
-    }
-
-    let features = data.get("features").and_then(Value::as_array).ok_or_else(|| {(axum::http::StatusCode::BAD_GATEWAY, "Forsyth County GIS response did not contain any features.".to_string(),)})?;
-
-    let mut events = Vec::new();
-
-    for (index, feature) in features.iter().enumerate() {
-        let properties = feature.get("properties").and_then(Value::as_object);
-
-        let geometry = feature.get("geometry").cloned();
-
-        let properties = match properties {
-            Some(properties) => properties,
-            None => continue,
-        };
-
-        let number = properties.get("ZANUMBER").and_then(Value::as_str).unwrap_or("Unknown Application");
-        let status = properties.get("ZASTATUS").and_then(Value::as_str).unwrap_or("Unknown");
-        let process = properties.get("PROCESS").and_then(Value::as_str).unwrap_or("");
-        let comments = properties.get("COMMENTS").and_then(Value::as_str).unwrap_or("");
-        let link = properties.get("LINK").and_then(Value::as_str).map(String::from);
-
-        let description = if !comments.is_empty() {
-            comments.to_string()
-        } else if !process.is_empty() {
-            process.to_string()
-        } else {
-            "Forsyth County zoning application.".to_string()
-        };
-
-        events.push(Event {
-
-            id: format!("zoning-{number}-{index}"),
-
-            title: format!("Zoning Application {number}"),
-            category: "development".to_string(),
-            description,
-            latitude: None,
-            longitude: None,
-            location: "Forsyth County, Georgia".to_string(),
-            status: status.to_string(),
-            date: String::new(),
-            source_name: Some("Forsyth County GIS".to_string()),
-            source_url: link,
-            geometry,
-        });
-    }
-
-    Ok(events)
+fn bad_gateway(error: String) -> (axum::http::StatusCode, String) {
+    (
+        axum::http::StatusCode::BAD_GATEWAY,
+        error,
+    )
 }
