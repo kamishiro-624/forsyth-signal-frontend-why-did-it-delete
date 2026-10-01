@@ -7,9 +7,11 @@ const searchInput = document.getElementById('search');
 const locationSearch = document.getElementById('location-search');
 const locationResults = document.getElementById('location-results');
 
+const EVENTS_URL = 'http://localhost:3000/api/events';
+const EVENTS_CACHE_NAME = 'forsyth-events-v1';
+
 let map;
 let mapLoaded = false;
-let mapEventsAdded = false;
 let allEvents = [];
 let eventSearchFields = [];
 let currentEvents = [];
@@ -61,41 +63,74 @@ function initializeMap() {
 }
 
 function renderMapEvents() {
-    if (!mapLoaded || mapEventsAdded) {
+    if (!mapLoaded) {
         return;
     }
 
-    mapEventsAdded = true;
     addEventMarkers(allEvents);
     addEventGeometry(allEvents);
 }
 
 async function loadEvents() {
+    let cache;
+    let cachedEvents;
+
     try {
-        const response = await fetch('http://localhost:3000/api/events');
+        if ('caches' in window) {
+            cache = await caches.open(EVENTS_CACHE_NAME);
+            const cachedResponse = await cache.match(EVENTS_URL);
+
+            if (cachedResponse) {
+                cachedEvents = await cachedResponse.json();
+                displayEvents(cachedEvents);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to read cached events:', error);
+    }
+
+    try {
+        const response = await fetch(EVENTS_URL, {cache: 'no-store'});
 
         if (!response.ok) {
             throw new Error(`API returned: ${response.status}`);
         }
 
-        allEvents = await response.json();
-        eventSearchFields = allEvents.map(event => [
-            event.title,
-            event.category,
-            event.location,
-            event.description
-        ].map(value => String(value ?? '').toLowerCase()));
-        renderEvents(allEvents);
-        renderMapEvents();
-    } catch (error) {
-        console.error('Failed to load events:', error);
+        const events = await response.json();
+        displayEvents(events);
 
-        eventsContainer.innerHTML = `
-            <div class='error'>
-                Failed to load events.
-            </div>
-        `;
+        if (cache) {
+            try {
+                await cache.put(EVENTS_URL, new Response(JSON.stringify(events), {
+                    headers: {'Content-Type': 'application/json'}
+                }));
+            } catch (error) {
+                console.error('Failed to cache events:', error);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to refresh events:', error);
+
+        if (!cachedEvents) {
+            eventsContainer.innerHTML = `
+                <div class='error'>
+                    Failed to load events.
+                </div>
+            `;
+        }
     }
+}
+
+function displayEvents(events) {
+    allEvents = events;
+    eventSearchFields = allEvents.map(event => [
+        event.title,
+        event.category,
+        event.location,
+        event.description
+    ].map(value => String(value ?? '').toLowerCase()));
+    renderEvents(allEvents);
+    renderMapEvents();
 }
 
 function renderEvents(events) {
