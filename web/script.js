@@ -1,16 +1,25 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs';
 
 const eventsContainer = document.getElementById('events');
+const eventCount = document.getElementById('event-count');
 const detailsContainer = document.getElementById('details');
 const searchInput = document.getElementById('search');
 const locationSearch = document.getElementById('location-search');
 const locationResults = document.getElementById('location-results');
 
 let map;
+let mapLoaded = false;
+let mapEventsAdded = false;
 let allEvents = [];
+let eventSearchFields = [];
+let currentEvents = [];
+let renderedEventCount = 0;
 let eventMarkers = [];
 
 let searchTimeout;
+let eventSearchTimeout;
+
+const EVENT_BATCH_SIZE = 100;
 
 function initializeMap() {
     map = new maplibregl.Map({
@@ -44,22 +53,40 @@ function initializeMap() {
     map.addControl(new maplibregl.GeolocateControl({positionOptions: {enableHighAccuracy: true}, trackUserLocation: false, showUserLocation: true, showAccuracyCircle: true}),'top-right');
 
     map.on('load', () => {
-        loadEvents();
+        mapLoaded = true;
+        renderMapEvents();
     });
+
+    loadEvents();
+}
+
+function renderMapEvents() {
+    if (!mapLoaded || mapEventsAdded) {
+        return;
+    }
+
+    mapEventsAdded = true;
+    addEventMarkers(allEvents);
+    addEventGeometry(allEvents);
 }
 
 async function loadEvents() {
     try {
-        const response = await fetch('/api/events');
+        const response = await fetch('http://localhost:3000/api/events');
 
         if (!response.ok) {
             throw new Error(`API returned: ${response.status}`);
         }
 
         allEvents = await response.json();
+        eventSearchFields = allEvents.map(event => [
+            event.title,
+            event.category,
+            event.location,
+            event.description
+        ].map(value => String(value ?? '').toLowerCase()));
         renderEvents(allEvents);
-        addEventMarkers(allEvents);
-        addEventGeometry(allEvents);
+        renderMapEvents();
     } catch (error) {
         console.error('Failed to load events:', error);
 
@@ -72,8 +99,13 @@ async function loadEvents() {
 }
 
 function renderEvents(events) {
-    eventsContainer.innerHTML = '';
-    if (events.length === 0) {
+    currentEvents = events;
+    renderedEventCount = 0;
+    eventsContainer.replaceChildren();
+    eventsContainer.scrollTop = 0;
+
+    if (currentEvents.length === 0) {
+        eventCount.textContent = 'No events found.';
         eventsContainer.innerHTML = `
             <div class='empty'>
                 No events found :(
@@ -82,9 +114,18 @@ function renderEvents(events) {
         return;
     }
 
-    for (const event of events) {
+    appendEventBatch();
+}
+
+function appendEventBatch() {
+    const end = Math.min(renderedEventCount + EVENT_BATCH_SIZE, currentEvents.length);
+    const fragment = document.createDocumentFragment();
+
+    for (let index = renderedEventCount; index < end; index++) {
+        const event = currentEvents[index];
         const element = document.createElement('article');
         element.className = 'event';
+        element.dataset.eventIndex = String(index);
         element.innerHTML = `
             <div class='event-category'>
                 ${event.category}
@@ -103,13 +144,36 @@ function renderEvents(events) {
             </div>
         `;
 
-        element.addEventListener('click', () => {
-            showDetails(event);
-        });
-
-        eventsContainer.appendChild(element);
+        fragment.appendChild(element);
     }
+
+    eventsContainer.appendChild(fragment);
+    renderedEventCount = end;
+
+    const hasMore = renderedEventCount < currentEvents.length;
+    eventCount.textContent = hasMore
+        ? `Showing ${renderedEventCount} of ${currentEvents.length} events. Scroll to load more.`
+        : `Showing ${renderedEventCount} of ${currentEvents.length} events.`;
 }
+
+eventsContainer.addEventListener('scroll', () => {
+    if (renderedEventCount < currentEvents.length &&
+        eventsContainer.scrollTop + eventsContainer.clientHeight >= eventsContainer.scrollHeight - 100) {
+        appendEventBatch();
+    }
+});
+
+eventsContainer.addEventListener('click', event => {
+    const eventElement = event.target.closest('.event');
+    if (!eventElement) {
+        return;
+    }
+
+    const selectedEvent = currentEvents[Number(eventElement.dataset.eventIndex)];
+    if (selectedEvent) {
+        showDetails(selectedEvent);
+    }
+});
 
 function showDetails(event) {
     detailsContainer.innerHTML = `
@@ -362,11 +426,16 @@ function renderLocationResults(results) {
 }
 
 searchInput.addEventListener('input', () => {
-    const query = searchInput.value.toLowerCase().trim();
+    clearTimeout(eventSearchTimeout);
 
-    const filteredEvents = allEvents.filter(event => event.title.toLowerCase().includes(query) || event.category.toLowerCase().includes(query) || event.location.toLowerCase().includes(query) || event.description.toLowerCase().includes(query));
+    eventSearchTimeout = setTimeout(() => {
+        const query = searchInput.value.toLowerCase().trim();
+        const filteredEvents = allEvents.filter((event, index) =>
+            eventSearchFields[index].some(field => field.includes(query))
+        );
 
-    renderEvents(filteredEvents);
+        renderEvents(filteredEvents);
+    }, 100);
 });
 
 locationSearch.addEventListener('input', () => {

@@ -21,6 +21,7 @@ html, body {
     width: 100%;
     height: 100%;
     margin: 0;
+    overflow: hidden;
     background-color: var(--white);
     color: var(--black);
     line-height: 1.5;
@@ -31,6 +32,8 @@ html, body {
     flex-direction: column;
     width: 100%;
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 #header {
@@ -62,6 +65,7 @@ html, body {
     flex: 1;
     min-height: 0;
     width: 100%;
+    overflow: hidden;
 }
 
 #events-panel,
@@ -87,7 +91,7 @@ html, body {
     position: relative;
     flex: 1;
     min-width: 0;
-    height: 100%;
+    min-height: 0;
 }
 
 #map {
@@ -131,6 +135,12 @@ html, body {
     display: block;
     width: calc(100% - 32px);
     margin: 0 16px 12px;
+}
+
+#event-count {
+    padding: 0 16px 8px;
+    font-size: 0.75rem;
+    color: rgba(32, 32, 32, 0.72);
 }
 
 #events {
@@ -315,30 +325,33 @@ html, body {
 @media (max-width: 900px) {
     #main {
         flex-direction: column;
-        overflow-y: auto;
     }
 
     #map-container {
         order: 1;
-        flex: 0 0 50vh;
-        min-height: 280px;
-        height: auto;
+        flex: 0 0 42%;
     }
 
     #events-panel {
         order: 2;
-        flex: 0 0 auto;
-        max-height: 55vh;
+        flex: 1 1 0;
         border-right: none;
         border-top: 1px solid var(--line-strong);
     }
 
     #details-panel {
         order: 3;
-        flex: 0 0 auto;
-        overflow-y: visible;
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
         border-left: none;
         border-top: 1px solid var(--line-strong);
+    }
+
+    #details {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
     }
 }
 
