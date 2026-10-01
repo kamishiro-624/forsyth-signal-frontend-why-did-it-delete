@@ -7,12 +7,13 @@ const searchInput = document.getElementById('search');
 const locationSearch = document.getElementById('location-search');
 const locationResults = document.getElementById('location-results');
 
-const EVENTS_URL = 'http://localhost:3000/api/events';
+const EVENTS_URL = 'http://localhost:3000/api/events'; // change this in prod
 const EVENTS_CACHE_NAME = 'forsyth-events-v1';
 
 let map;
 let mapLoaded = false;
 let allEvents = [];
+let selectedEvent = null;
 let eventSearchFields = [];
 let currentEvents = [];
 let renderedEventCount = 0;
@@ -122,7 +123,11 @@ async function loadEvents() {
 }
 
 function displayEvents(events) {
+    const selectedEventId = selectedEvent?.id;
     allEvents = events;
+    selectedEvent = selectedEventId
+        ? allEvents.find(event => event.id === selectedEventId) ?? null
+        : null;
     eventSearchFields = allEvents.map(event => [
         event.title,
         event.category,
@@ -159,8 +164,11 @@ function appendEventBatch() {
     for (let index = renderedEventCount; index < end; index++) {
         const event = currentEvents[index];
         const element = document.createElement('article');
-        element.className = 'event';
+        element.className = event === selectedEvent ? 'event is-selected' : 'event';
         element.dataset.eventIndex = String(index);
+        element.setAttribute('role', 'button');
+        element.setAttribute('aria-pressed', String(event === selectedEvent));
+        element.tabIndex = 0;
         element.innerHTML = `
             <div class='event-category'>
                 ${event.category}
@@ -210,7 +218,27 @@ eventsContainer.addEventListener('click', event => {
     }
 });
 
+eventsContainer.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+    }
+
+    const eventElement = event.target.closest('.event');
+    if (!eventElement) {
+        return;
+    }
+
+    event.preventDefault();
+    const selected = currentEvents[Number(eventElement.dataset.eventIndex)];
+    if (selected) {
+        showDetails(selected);
+    }
+});
+
 function showDetails(event) {
+    selectedEvent = event;
+    updateSelectedEvent();
+
     detailsContainer.innerHTML = `
         <div class='details-category'>
             ${event.category}
@@ -324,19 +352,73 @@ function showDetails(event) {
 
     `;
 
-    if (event.latitude !== null && event.longitude !== null) {
+    if (mapLoaded && event.geometry?.type !== 'Point' && event.geometry?.coordinates) {
+        const bounds = new maplibregl.LngLatBounds();
+        extendBounds(event.geometry.coordinates, bounds);
+
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, {
+                padding: 72,
+                maxZoom: 15,
+                duration: 700
+            });
+        }
+    } else if (mapLoaded && event.latitude !== null && event.longitude !== null) {
         map.flyTo({
             center: [
                 event.longitude,
                 event.latitude
             ],
-            zoom: 14
+            zoom: 15,
+            duration: 700
         });
     }
 }
 
+function extendBounds(coordinates, bounds) {
+    if (!Array.isArray(coordinates)) {
+        return;
+    }
+
+    if (coordinates.length >= 2 &&
+        typeof coordinates[0] === 'number' &&
+        typeof coordinates[1] === 'number') {
+        bounds.extend([coordinates[0], coordinates[1]]);
+        return;
+    }
+
+    for (const coordinate of coordinates) {
+        extendBounds(coordinate, bounds);
+    }
+}
+
+function updateSelectedEvent() {
+    for (const element of eventsContainer.querySelectorAll('.event')) {
+        const event = currentEvents[Number(element.dataset.eventIndex)];
+        const isSelected = event === selectedEvent;
+        element.classList.toggle('is-selected', isSelected);
+        element.setAttribute('aria-pressed', String(isSelected));
+    }
+
+    for (const {event, marker} of eventMarkers) {
+        marker.getElement().classList.toggle('is-selected', event === selectedEvent);
+    }
+
+    if (!mapLoaded) {
+        return;
+    }
+
+    const selectedIndex = allEvents.indexOf(selectedEvent);
+    const filter = ['==', ['get', 'event-index'], selectedIndex];
+    for (const layerId of ['event-geometry-selected-fill', 'event-geometry-selected-outline']) {
+        if (map.getLayer(layerId)) {
+            map.setFilter(layerId, selectedIndex < 0 ? ['==', ['get', 'event-index'], -1] : filter);
+        }
+    }
+}
+
 function addEventMarkers(events) {
-    for (const marker of eventMarkers) {
+    for (const {marker} of eventMarkers) {
         marker.remove();
     }
 
@@ -348,17 +430,23 @@ function addEventMarkers(events) {
         }
 
         const marker = new maplibregl.Marker().setLngLat([event.longitude, event.latitude]).addTo(map);
+        marker.getElement().classList.toggle('is-selected', event === selectedEvent);
 
-        marker.getElement().addEventListener('click', () => {
+        marker.getElement().addEventListener('click', clickEvent => {
+            clickEvent.stopPropagation();
             showDetails(event);
         });
 
-        eventMarkers.push(marker);
+        eventMarkers.push({event, marker});
     }
 }
 
 function addEventGeometry(events) {
-    const features = events.filter(event => event.geometry !== null && event.geometry !== undefined).map(event => ({type: 'Feature', geometry: event.geometry, properties: {id: event.id}}));
+    const features = events.flatMap((event, index) =>
+        event.geometry === null || event.geometry === undefined
+            ? []
+            : [{type: 'Feature', geometry: event.geometry, properties: {'event-index': index}}]
+    );
 
     const data = {
         type: 'FeatureCollection',
@@ -367,6 +455,7 @@ function addEventGeometry(events) {
 
     if (map.getSource('event-geometry')) {
         map.getSource('event-geometry').setData(data);
+        updateSelectedEvent();
         return;
     }
 
@@ -395,15 +484,34 @@ function addEventGeometry(events) {
         }
     });
 
+    map.addLayer({
+        id: 'event-geometry-selected-fill',
+        type: 'fill',
+        source: 'event-geometry',
+        filter: ['==', ['get', 'event-index'], -1],
+        paint: {
+            'fill-color': '#263a16',
+            'fill-opacity': 0.42
+        }
+    });
+
+    map.addLayer({
+        id: 'event-geometry-selected-outline',
+        type: 'line',
+        source: 'event-geometry',
+        filter: ['==', ['get', 'event-index'], -1],
+        paint: {
+            'line-color': '#263a16',
+            'line-width': 4
+        }
+    });
+
     map.on('click', 'event-geometry-fill', event => {
         if (!event.features || event.features.length === 0) {
             return;
         }
 
-        const id = event.features[0].properties.id;
-
-        const selected = allEvents.find(item => item.id === id);
-
+        const selected = allEvents[Number(event.features[0].properties['event-index'])];
         if (selected) {
             showDetails(selected);
         }
@@ -416,6 +524,8 @@ function addEventGeometry(events) {
     map.on('mouseleave', 'event-geometry-fill', () => {
         map.getCanvas().style.cursor = ''; 
     });
+
+    updateSelectedEvent();
 }
 
 async function searchLocation(query) {

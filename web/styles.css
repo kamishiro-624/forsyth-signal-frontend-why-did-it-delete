@@ -157,12 +157,50 @@ html, body {
     cursor: pointer;
     border-left: 4px solid transparent;
     border-bottom: 1px solid var(--line);
-    transition: background-color 0.15s, border-color 0.15s;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
-.event:hover {
+.event:hover,
+.event:focus-visible {
     background-color: var(--muted);
     border-left-color: var(--orange);
+}
+
+.event:focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: -2px;
+}
+
+.event.is-selected {
+    background-color: #f3ead2;
+    border-left-color: var(--green);
+    box-shadow: inset 3px 0 0 var(--orange);
+}
+
+.event.is-selected .event-title {
+    color: var(--green-dark);
+}
+
+.event.is-selected .event-category {
+    background-color: #fff;
+    border-color: var(--green);
+}
+
+.maplibregl-marker {
+    cursor: pointer;
+}
+
+.maplibregl-marker svg {
+    transition: filter 0.15s, transform 0.15s;
+}
+
+.maplibregl-marker.is-selected svg {
+    filter: drop-shadow(0 0 5px rgba(244, 153, 26, 0.95));
+    transform: scale(1.3);
+}
+
+.maplibregl-marker.is-selected svg path {
+    fill: var(--green);
 }
 
 .event-category,
