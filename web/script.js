@@ -1,3 +1,5 @@
+// lowk should we split this up?
+
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs';
 
 const eventsContainer = document.getElementById('events');
@@ -7,7 +9,7 @@ const searchInput = document.getElementById('search');
 const locationSearch = document.getElementById('location-search');
 const locationResults = document.getElementById('location-results');
 
-const EVENTS_URL = 'http://localhost:3000/api/events'; // change this in prod
+const EVENTS_URL = 'http://localhost:3000/api/events'; // change this in prod  // frick no!!!!!!
 const EVENTS_CACHE_NAME = 'forsyth-events-v1';
 
 let map;

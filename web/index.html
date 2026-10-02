@@ -23,6 +23,24 @@
                 <div id="events-header">
                     <h2>Events</h2>
                 </div>
+
+                <div id="event-tabs">
+                    <button class="event-tab is-active" data-state="upcoming">Upcoming</button>
+                    <button class="event-tab" data-state="active">Active</button>
+                    <button class="event-tab" data-state="past">Past</button>
+                </div>
+
+                <div id="event-filters">
+                    <select id="category-filter">
+                        <option value="all">All categories</option>
+                        <option value="development">Development</option>
+                        <option value="government">Government</option>
+                        <option value="education">Education</option>
+                        <option value="transportation">Transportation</option>
+                        <option value="community">Community</option>
+                    </select>
+                </div>
+
                 <input id="search" type="search" placeholder="Search events...">
                 <div id="event-count" role="status" aria-live="polite"></div>
                 <div id="events"></div>
@@ -33,6 +51,22 @@
                     <input id="location-search" type="search" placeholder="Search the map...">
                     <div id="location-results"></div>
                 </div>
+                <div id="address-panel">
+                    <div class="address-heading">What affects me?</div>
+
+                    <div class="address-description">
+                        Enter an address to find nearby events,
+                        developments, and public meetings.
+                    </div>
+
+                    <div class="address-input-row">
+                        <input id="address-search" type="search" placeholder="Enter an address...">
+                        <button id="address-submit">Find</button>
+                    </div>
+
+                    <div id="address-results"></div>
+                </div>
+
                 <div id="map"></div>
             </section>
 
@@ -52,7 +86,7 @@
         </footer>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <script type="module" src="js/main.js"></script>
 
 </body>
 
