@@ -1,4 +1,8 @@
-// this is now deprecated
+/**
+ * @deprecated This file is deprecated but is being kept here for (lowk idk what to put here) 
+ * check out the /js folder instead
+ */
+
 
 // lowk should we split this up?
 
