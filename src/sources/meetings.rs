@@ -29,7 +29,7 @@ pub fn load_meetings() -> Vec<Event> {
         events.push(meeting(
             &format!("boe-regular-{date}"),
             "Forsyth County Board of Education Meeting",
-            "schools",
+            "education",
             date,
             "Regular Board of Education meeting. Public portion begins at 6 PM.",
             BOARD_ADDRESS,
@@ -43,7 +43,7 @@ pub fn load_meetings() -> Vec<Event> {
         events.push(meeting(
             &format!("boe-work-{date}"),
             "Forsyth County Board of Education Work Session",
-            "schools",
+            "education",
             date,
             "Board of Education work session.",
             BOARD_ADDRESS,
@@ -152,7 +152,7 @@ fn meeting(id: &str, title: &str, category: &str, date: &str, description: &str,
         status: "scheduled".to_string(),
         date: date.to_string(),
         source_name: Some(
-            if category == "schools" {
+            if category == "education" {
                 "Forsyth County Schools"
             } else {
                 "Forsyth County Government"
