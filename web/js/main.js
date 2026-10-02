@@ -196,19 +196,7 @@ async function loadEvents() {
 
         addEventMarkers(allEvents, showEvent);
 
-        addEventGeometry(allEvents, id => {
-            const event =
-                allEvents.find(
-                    item =>
-                        item.id === id
-                );
-
-            if (event) {
-
-                showEvent(event);
-
-            }
-        });
+        addEventGeometry(allEvents, showEvent);
 
         render();
 

@@ -69,6 +69,7 @@ export function addEventMarkers(events, onEventSelect) {
         const marker = new maplibregl.Marker().setLngLat([event.longitude, event.latitude]).addTo(map);
 
         marker.getElement().addEventListener('click', () => {
+            clearSelectedZoning();
             onEventSelect(event);
         });
 
@@ -98,13 +99,7 @@ export function addEventGeometry(events, onEventSelect) {
         return;
     }
 
-    map.addSource(
-        'event-geometry',
-        {
-            type: 'geojson',
-            data
-        }
-    );
+    map.addSource('event-geometry', {type: 'geojson', data});
 
     map.addLayer({
         id: 'event-geometry-fill',
@@ -133,12 +128,14 @@ export function addEventGeometry(events, onEventSelect) {
 
         const id = event.features[0].properties.id;
 
-        const selectedEvent = events.find(item => item.id === id);
+        const selectedEvent = events.find(item => String(item.id) === String(id));
 
-        if (selectedEvent) {
-            selectZoningGeometry(selectedEvent);
-            onEventSelect(selectedEvent);
+        if (!selectedEvent) {
+            return;
         }
+
+        selectEventGeometry(selectedEvent);
+        onEventSelect(selectedEvent);
     });
 
     map.on('mouseenter', 'event-geometry-fill', () => {
@@ -151,13 +148,6 @@ export function addEventGeometry(events, onEventSelect) {
 }
 
 export function selectEventGeometry(event) {
-    if (!event || !event.geometry) {
-        return;
-    }
-    selectZoningGeometry(event);
-}
-
-function selectZoningGeometry(event) {
     if (!event.geometry) {
         return;
     }
@@ -177,18 +167,15 @@ function selectZoningGeometry(event) {
         ]
     };
 
-    const existing = map.getSource('selected-zoning');
+    const source = map.getSource('selected-zoning');
 
-    if (existing) {
-        existing.setData(data);
+    if (source) {
+        source.setData(data);
     } else {
-        map.addSource(
-            'selected-zoning',
-            {
-                type: 'geojson',
-                data
-            }
-        );
+        map.addSource('selected-zoning', {
+            type: 'geojson',
+            data
+        });
 
         map.addLayer({
             id: 'selected-zoning-fill',
@@ -214,19 +201,24 @@ function selectZoningGeometry(event) {
     zoomToGeometry(event.geometry);
 }
 
+function clearSelectedZoning() {
+    selectedZoningId = null;
+    const source = map.getSource('selected-zoning');
+    if (source) {
+        source.setData({
+            type: 'FeatureCollection',
+            features: []
+        });
+    }
+}
+
 function zoomToGeometry(geometry) {
     const bounds = new maplibregl.LngLatBounds();
 
     addGeometryToBounds(geometry, bounds);
 
     if (!bounds.isEmpty()) {
-        map.fitBounds(
-            bounds,
-            {
-                padding: 80,
-                maxZoom: 15
-            }
-        );
+        map.fitBounds(bounds, {padding: 80, maxZoom: 15});
     }
 }
 
@@ -243,48 +235,29 @@ function addGeometryToBounds(geometry, bounds) {
     if (geometry.type === 'MultiPoint') {
         for (const coordinate of geometry.coordinates) {
             bounds.extend(coordinate);
-        }
-        return;
-    }
 
-    if (geometry.type === 'LineString') {
-        for (const coordinate of geometry.coordinates) {
-            bounds.extend(coordinate);
         }
 
         return;
     }
 
-    if (geometry.type === 'MultiLineString') {
-        for (const line of geometry.coordinates) {
-            for (const coordinate of line) {
-                bounds.extend(coordinate);
-            }
-        }
+    if (geometry.type === 'LineString' || geometry.type === 'MultiLineString' || geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+        addCoordinatesToBounds(geometry.coordinates, bounds);
+    }
+}
 
+function addCoordinatesToBounds(coordinates, bounds) {
+    if (!Array.isArray(coordinates)) {
         return;
     }
 
-    if (geometry.type === 'Polygon') {
-        for (const ring of geometry.coordinates) {
-            for (const coordinate of ring) {
-                bounds.extend(coordinate);
-            }
-        }
-
+    if (coordinates.length >= 2 && typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
+        bounds.extend(coordinates);
         return;
     }
 
-    if (geometry.type === 'MultiPolygon') {
-        for (const polygon of geometry.coordinates) {
-            for (const ring of polygon) {
-                for (const coordinate of ring) {
-                    bounds.extend(coordinate);
-                }
-            }
-        }
-
-        return;
+    for (const coordinate of coordinates) {
+        addCoordinatesToBounds(coordinate, bounds);
     }
 }
 
