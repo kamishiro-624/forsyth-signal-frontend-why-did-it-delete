@@ -15,7 +15,24 @@ let renderedEventCount = 0;
 const EVENT_BATCH_SIZE = 40;
 
 export function setEvents(events) {
-    allEvents = events.map(event => ({...event, state: getEventState(event)}));
+    const idCounts = new Map();
+    for (const [index, event] of events.entries()) {
+        const id = String(event.id ?? `event-${index}`);
+        idCounts.set(id, (idCounts.get(id) || 0) + 1);
+    }
+
+    const idOccurrences = new Map();
+    allEvents = events.map((event, index) => {
+        const rawId = String(event.id ?? `event-${index}`);
+        const occurrence = idOccurrences.get(rawId) || 0;
+        idOccurrences.set(rawId, occurrence + 1);
+
+        return {
+            ...event,
+            id: idCounts.get(rawId) > 1 ? `${rawId}::${occurrence}` : event.id,
+            state: getEventState(event)
+        };
+    });
     searchableEvents = allEvents.map(event => [
         event.title,
         event.category,
@@ -146,12 +163,6 @@ function appendEventBatch(container, countContainer) {
             <div class='event-details-hint'>
                 View details <span aria-hidden='true'>→</span>
             </div>
-
-            ${
-                event.id === selectedEventId
-                    ? `<div class='event-selection-indicator'>Selected for details</div>`
-                    : ''
-            }
 
         `;
 

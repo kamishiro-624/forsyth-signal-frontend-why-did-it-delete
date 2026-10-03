@@ -3,10 +3,11 @@ import {
     addEventMarkers,
     addEventGeometry,
     selectEventGeometry,
+    getMap,
     flyTo,
     isMapReady,
     setSelectedEvent
-} from './map.js';
+} from './map.js?v=map-selection-zoom';
 
 import {
     setEvents,
@@ -16,7 +17,7 @@ import {
     setSearch,
     selectEvent,
     renderEvents
-} from './events.js?v=whole-events-scroll';
+} from './events.js?v=unique-event-keys';
 
 import {
     initializeSearch
@@ -46,11 +47,12 @@ function render() {
     renderEvents(eventsContainer, eventCount, showEvent);
 }
 
-function showEvent(event, source = 'list') {
+function showEvent(event, source = 'list', mapLocation = null) {
     document.getElementById('event-group-panel').hidden = true;
     selectEvent(event.id);
+    const isMapSelection = source.startsWith('map-');
 
-    if (source === 'map') {
+    if (isMapSelection) {
         const state = event.state;
         if (state) {
             setState(state);
@@ -159,25 +161,43 @@ function showEvent(event, source = 'list') {
 
     if (event.geometry !== null && event.geometry !== undefined) {
         if (isMapReady()) {
-            selectEventGeometry(event);
+            selectEventGeometry(event, {fitBounds: !isMapSelection});
         } else {
             setSelectedEvent(event.id);
         }
-    } else {
+    }
+
+    if (isMapReady() && source === 'map-zone' && mapLocation) {
+        zoomToMapLocation(mapLocation);
+    } else if (isMapReady() && source === 'map-marker' &&
+        event.latitude !== null && event.longitude !== null) {
+        flyTo(event.latitude, event.longitude);
+    } else if (!event.geometry) {
         setSelectedEvent(event.id);
-        if (isMapReady() && event.latitude !== null && event.longitude !== null) {
+        if (isMapReady() && !isMapSelection &&
+            event.latitude !== null && event.longitude !== null) {
             flyTo(event.latitude, event.longitude);
         }
     }
 
     render();
     if (window.matchMedia('(max-width: 900px)').matches) {
-        setMobilePanel(source === 'map' ? 'events-panel' : 'details-panel', false);
+        setMobilePanel(isMapSelection ? 'events-panel' : 'details-panel', false);
     }
 }
 
-function showMapEvent(event) {
-    showEvent(event, 'map');
+function showMapEvent(event, source = 'map-marker', mapLocation = null) {
+    showEvent(event, source, mapLocation);
+}
+
+function zoomToMapLocation(location) {
+    const map = getMap();
+    const currentZoom = map.getZoom();
+    map.easeTo({
+        center: location,
+        zoom: Math.min(16, Math.max(currentZoom + 1.5, 14)),
+        duration: 550
+    });
 }
 
 function getWhyItMatters(event) {
@@ -489,25 +509,12 @@ document.getElementById('events-back-to-top').addEventListener('click', () => {
 const addressPanel = document.getElementById('address-panel');
 const addressReopen = document.getElementById('address-reopen');
 
-document.getElementById('address-minimize').addEventListener('click', event => {
-    const minimized = addressPanel.classList.toggle('is-minimized');
-    event.currentTarget.setAttribute('aria-expanded', String(!minimized));
-    event.currentTarget.setAttribute(
-        'aria-label',
-        minimized ? 'Expand What affects me' : 'Minimize What affects me'
-    );
-});
-
-document.getElementById('address-close').addEventListener('click', () => {
+document.getElementById('address-close')?.addEventListener('click', () => {
     addressPanel.hidden = true;
     addressReopen.hidden = false;
 });
 
-addressReopen.addEventListener('click', () => {
+addressReopen?.addEventListener('click', () => {
     addressPanel.hidden = false;
-    addressPanel.classList.remove('is-minimized');
-    const minimizeButton = document.getElementById('address-minimize');
-    minimizeButton.setAttribute('aria-expanded', 'true');
-    minimizeButton.setAttribute('aria-label', 'Minimize What affects me');
     addressReopen.hidden = true;
 });

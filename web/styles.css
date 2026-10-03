@@ -258,17 +258,6 @@ html, body {
     border-color: var(--green);
 }
 
-.event-selection-indicator {
-    display: inline-block;
-    margin-top: 7px;
-    padding: 3px 9px;
-    color: var(--white);
-    background: var(--green);
-    border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 700;
-}
-
 .maplibregl-marker {
     cursor: pointer;
 }
@@ -511,10 +500,6 @@ html, body {
 
 .address-panel-actions button:focus-visible {
     outline: 2px solid var(--orange);
-}
-
-#address-panel.is-minimized .address-content {
-    display: none;
 }
 
 #address-reopen {
