@@ -2,11 +2,39 @@ let maplibregl;
 let map;
 let selectedZoningId = null;
 let mapReady = false;
-let eventFeatures = [];
+let eventMarkers = [];
 let geometryEvents = [];
+const LAST_USER_POSITION_KEY = 'forsyth-signal-last-user-position';
+
+function getLastUserPosition() {
+    try {
+        const saved = localStorage.getItem(LAST_USER_POSITION_KEY);
+        if (!saved) {
+            return null;
+        }
+
+        const position = JSON.parse(saved);
+        if (position &&
+            typeof position === 'object' &&
+            Number.isFinite(position.latitude) &&
+            Number.isFinite(position.longitude) &&
+            Math.abs(position.latitude) <= 90 &&
+            Math.abs(position.longitude) <= 180) {
+            return position;
+        }
+
+        console.error('Saved user position is invalid.');
+        localStorage.removeItem(LAST_USER_POSITION_KEY);
+    } catch (error) {
+        console.error('Failed to read saved user position:', error);
+    }
+
+    return null;
+}
 
 export async function initializeMap(onEventSelect) {
     maplibregl = await import('https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs');
+    const lastPosition = getLastUserPosition();
     map = new maplibregl.Map({
         container: 'map',
         style: {
@@ -27,23 +55,41 @@ export async function initializeMap(onEventSelect) {
                 }
             ]
         },
-        center: [-84.14, 34.21],
-        zoom: 10
+        center: lastPosition
+            ? [lastPosition.longitude, lastPosition.latitude]
+            : [-84.14, 34.21],
+        zoom: lastPosition ? 14 : 10
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-    map.addControl(
-        new maplibregl.GeolocateControl({
-            positionOptions: {
-                enableHighAccuracy: true
-            },
-            trackUserLocation: false,
-            showUserLocation: true,
-            showAccuracyCircle: true
-        }),
-        'top-right'
-    );
+    const geolocateControl = new maplibregl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: false,
+        showUserLocation: true,
+        showAccuracyCircle: true
+    });
+    geolocateControl.on('geolocate', event => {
+        const position = {
+            latitude: event.coords.latitude,
+            longitude: event.coords.longitude
+        };
+
+        try {
+            localStorage.setItem(LAST_USER_POSITION_KEY, JSON.stringify(position));
+        } catch (error) {
+            console.error('Failed to save user position:', error);
+        }
+    });
+    map.addControl(geolocateControl, 'top-right');
+
+    if (lastPosition) {
+        new maplibregl.Marker({color: '#344F1F'})
+            .setLngLat([lastPosition.longitude, lastPosition.latitude])
+            .addTo(map);
+    }
 
     map.on('load', () => {
         mapReady = true;
@@ -62,66 +108,26 @@ export function isMapReady() {
 }
 
 export function addEventMarkers(events, onEventSelect) {
-    eventFeatures = events.filter(event => event.latitude !== null && event.longitude !== null);
-    const data = {
-        type: 'FeatureCollection',
-        features: eventFeatures.map(event => ({
-            type: 'Feature',
-            geometry: {type: 'Point', coordinates: [event.longitude, event.latitude]},
-            properties: {id: event.id}
-        }))
-    };
-
-    if (map.getSource('event-points')) {
-        map.getSource('event-points').setData(data);
-        return;
+    for (const {marker} of eventMarkers) {
+        marker.remove();
     }
+    eventMarkers = [];
 
-    map.addSource('event-points', {type: 'geojson', data});
-    map.addLayer({
-        id: 'event-points',
-        type: 'circle',
-        source: 'event-points',
-        filter: ['!=', ['get', 'id'], selectedZoningId ?? ''],
-        paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 13, 7],
-            'circle-color': '#344F1F',
-            'circle-stroke-color': '#F4991A',
-            'circle-stroke-width': 1.5
-        }
-    });
-    map.addLayer({
-        id: 'event-points-selected',
-        type: 'circle',
-        source: 'event-points',
-        filter: ['==', ['get', 'id'], selectedZoningId ?? ''],
-        paint: {
-            'circle-radius': 9,
-            'circle-color': '#F4991A',
-            'circle-stroke-color': '#263a16',
-            'circle-stroke-width': 2
-        }
-    });
-
-    map.on('click', 'event-points', event => {
-        if (!event.features || event.features.length === 0) {
-            return;
+    for (const event of events) {
+        if (event.latitude === null || event.longitude === null) {
+            continue;
         }
 
-        const id = event.features[0].properties.id;
-        const selected = eventFeatures.find(item => String(item.id) === String(id));
-        if (selected) {
-            clearSelectedZoning();
-            onEventSelect(selected);
-        }
-    });
-
-    map.on('mouseenter', 'event-points', () => {
-        map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', 'event-points', () => {
-        map.getCanvas().style.cursor = '';
-    });
+        const marker = new maplibregl.Marker()
+            .setLngLat([event.longitude, event.latitude])
+            .addTo(map);
+        marker.getElement().classList.toggle('is-selected', String(event.id) === String(selectedZoningId));
+        marker.getElement().addEventListener('click', clickEvent => {
+            clickEvent.stopPropagation();
+            onEventSelect(event);
+        });
+        eventMarkers.push({event, marker});
+    }
 }
 
 export function addEventGeometry(events, onEventSelect) {
@@ -199,7 +205,7 @@ export function selectEventGeometry(event) {
         return;
     }
 
-    selectedZoningId = event.id;
+    setSelectedEvent(event.id);
 
     const data = {
         type: 'FeatureCollection',
@@ -249,10 +255,10 @@ export function selectEventGeometry(event) {
 }
 
 export function setSelectedEvent(id) {
+    clearSelectedZoning();
     selectedZoningId = id;
-    if (mapReady && map.getLayer('event-points')) {
-        map.setFilter('event-points', ['!=', ['get', 'id'], id]);
-        map.setFilter('event-points-selected', ['==', ['get', 'id'], id]);
+    for (const {event, marker} of eventMarkers) {
+        marker.getElement().classList.toggle('is-selected', String(event.id) === String(id));
     }
 }
 
