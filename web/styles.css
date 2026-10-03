@@ -772,13 +772,31 @@ html, body {
     left: 12px;
     bottom: 20px;
     z-index: 1200;
+    display: flex;
+    flex-direction: column;
     width: 340px;
     max-width: calc(100% - 24px);
+    max-height: min(70dvh, 620px);
     padding: 14px;
     background-color: #fff;
     border: 1px solid var(--line-strong);
     border-radius: 7px;
     box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.address-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#address-results {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .address-heading {
@@ -871,8 +889,27 @@ html, body {
 }
 
 .impact-event {
+    display: block;
+    width: 100%;
     padding: 8px 0;
+    color: inherit;
+    text-align: left;
+    background: transparent;
     border-top: 1px solid var(--line);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    cursor: pointer;
+}
+
+.impact-event:hover,
+.impact-event:focus-visible {
+    background: var(--muted);
+}
+
+.impact-event:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: -2px;
 }
 
 .impact-distance {
@@ -1212,7 +1249,6 @@ html, body {
         bottom: max(10px, env(safe-area-inset-bottom));
         width: min(340px, calc(100% - 20px));
         max-height: 38dvh;
-        overflow-y: auto;
         transition: opacity 0.16s ease, transform 0.16s ease;
     }
 

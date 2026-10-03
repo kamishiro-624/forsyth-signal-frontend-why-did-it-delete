@@ -6,7 +6,7 @@ import {
 import {
     addAddressMarker,
     flyTo
-} from './map.js';
+} from './map.js?v=group-switch-selection';
 
 let addressMarker = null;
 let savedAddress = null;
@@ -18,6 +18,24 @@ export function setAddressEvents(events) {
 
 export function initializeAddressSearch({input, button, results, events, onEventSelect}) {
     addressEvents = events;
+    results.addEventListener('click', event => {
+        if (!(event.target instanceof Element)) {
+            return;
+        }
+
+        const result = event.target.closest('.impact-event');
+        if (!result) {
+            return;
+        }
+
+        const selectedEvent = addressEvents.find(
+            item => String(item.id) === result.dataset.eventId
+        );
+        if (selectedEvent) {
+            onEventSelect(selectedEvent, 'address-result');
+        }
+    });
+
     const saved = localStorage.getItem('forsyth-signal-address');
 
     if (saved) {
@@ -134,6 +152,7 @@ function renderImpact(container, nearby) {
 
     const direct = nearby.filter(item => item.distance <= 0.25);
     const close = nearby.filter(item => item.distance > 0.25 && item.distance <= 1);
+    const farther = nearby.filter(item => item.distance > 1);
 
     let html = `
         <div class='impact-heading'>
@@ -155,11 +174,21 @@ function renderImpact(container, nearby) {
     if (close.length > 0) {
         html += `
             <div class='impact-heading'>
-                Nearby
+                Within 1 mile
             </div>
         `;
 
         html += renderImpactGroup(close);
+    }
+
+    if (farther.length > 0) {
+        html += `
+            <div class='impact-heading'>
+                Within 2 miles
+            </div>
+        `;
+
+        html += renderImpactGroup(farther);
     }
 
     container.innerHTML = html;
@@ -167,7 +196,7 @@ function renderImpact(container, nearby) {
 
 function renderImpactGroup(events) {
     return events.map(item => `
-        <div class='impact-event' data-event-id='${item.event.id}'>
+        <button class='impact-event' type='button' data-event-id='${escapeHtml(item.event.id)}'>
             <strong>
                 ${escapeHtml(
                     item.event.title
@@ -176,7 +205,7 @@ function renderImpactGroup(events) {
 
             <div class='impact-distance'>
                 ${item.distance.toFixed(1)} miles away
-            </div>
+            </button>
         </div>
     `).join('');
 }

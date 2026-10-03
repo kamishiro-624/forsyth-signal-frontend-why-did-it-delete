@@ -26,7 +26,7 @@ import {
 import {
     initializeAddressSearch,
     setAddressEvents
-} from './address.js';
+} from './address.js?v=clickable-nearby-events';
 
 const eventsContainer = document.getElementById('events');
 const detailsContainer = document.getElementById('details');
