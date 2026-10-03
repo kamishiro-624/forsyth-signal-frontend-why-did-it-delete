@@ -7,7 +7,7 @@ import {
     flyTo,
     isMapReady,
     setSelectedEvent
-} from './map.js?v=single-zone-selection';
+} from './map.js?v=group-switch-selection';
 
 import {
     setEvents,

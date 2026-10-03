@@ -167,8 +167,9 @@ export function addEventMarkers(events, onEventSelect) {
             if (eventsAtLocation.length === 1) {
                 onEventSelect(eventsAtLocation[0], 'map-marker');
             } else {
+                setSelectedEvent(null);
                 for (const {marker: otherMarker} of eventMarkers) {
-                    otherMarker.getElement().classList.remove('is-group-open');
+                    otherMarker.getElement().classList.remove('is-selected', 'is-group-open');
                 }
                 markerElement.classList.add('is-selected', 'is-group-open');
                 showEventChooser(
