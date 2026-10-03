@@ -262,6 +262,10 @@ html, body {
     cursor: pointer;
 }
 
+#events-back-to-top[hidden] {
+    display: none;
+}
+
 .maplibregl-marker.has-event-group {
     z-index: 1000 !important;
 }

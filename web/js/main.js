@@ -504,6 +504,17 @@ document.getElementById('events-back-to-top').addEventListener('click', () => {
     }
 });
 
+const eventsPanel = document.getElementById('events-panel');
+const backToTopButton = document.getElementById('events-back-to-top');
+
+eventsPanel.addEventListener('scroll', () => {
+    if (!window.matchMedia('(max-width: 900px)').matches) {
+        return;
+    }
+
+    backToTopButton.hidden = eventsPanel.scrollTop <= 0;
+});
+
 const addressPanel = document.getElementById('address-panel');
 const addressReopen = document.getElementById('address-reopen');
 
