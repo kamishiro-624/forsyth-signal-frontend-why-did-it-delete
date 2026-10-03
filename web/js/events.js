@@ -29,7 +29,7 @@ export function setEvents(events) {
 
         return {
             ...event,
-            id: idCounts.get(rawId) > 1 ? `${rawId}::${occurrence}` : event.id,
+            id: idCounts.get(rawId) > 1 ? `${rawId}::${occurrence}` : rawId,
             state: getEventState(event)
         };
     });
@@ -98,13 +98,16 @@ export function renderEvents(container, countContainer, onSelect) {
         return;
     }
 
-    appendEventBatch(container, countContainer);
     const selectedIndex = visibleEvents.findIndex(event => event.id === selectedEventId);
-    while (selectedIndex >= renderedEventCount) {
-        appendEventBatch(container, countContainer);
+    if (selectedIndex >= EVENT_BATCH_SIZE) {
+        const [selectedEvent] = visibleEvents.splice(selectedIndex, 1);
+        visibleEvents.unshift(selectedEvent);
     }
+
+    appendEventBatch(container, countContainer);
     if (selectedIndex >= 0) {
-        container.children[selectedIndex]?.scrollIntoView({block: 'nearest'});
+        const selectedCard = container.querySelector('.event.is-selected');
+        selectedCard?.scrollIntoView({block: 'nearest'});
     }
 }
 

@@ -298,15 +298,31 @@ export function addEventGeometry(events, onEventSelect) {
         return;
     }
 
-    map.addSource('event-geometry', {type: 'geojson', data});
+    map.addSource('event-geometry', {
+        type: 'geojson',
+        data,
+        promoteId: 'id',
+        maxzoom: 13,
+        tolerance: 0.75
+    });
 
     map.addLayer({
         id: 'event-geometry-fill',
         type: 'fill',
         source: 'event-geometry',
         paint: {
-            'fill-color': '#F4991A',
-            'fill-opacity': 0.18
+            'fill-color': [
+                'case',
+                ['boolean', ['feature-state', 'selected'], false],
+                '#344F1F',
+                '#F4991A'
+            ],
+            'fill-opacity': [
+                'case',
+                ['boolean', ['feature-state', 'selected'], false],
+                0.35,
+                0.18
+            ]
         }
     });
 
@@ -315,9 +331,19 @@ export function addEventGeometry(events, onEventSelect) {
         type: 'line',
         source: 'event-geometry',
         paint: {
-            'line-color': '#F4991A',
+            'line-color': [
+                'case',
+                ['boolean', ['feature-state', 'selected'], false],
+                '#344F1F',
+                '#F4991A'
+            ],
             'line-opacity': 0.9,
-            'line-width': 2
+            'line-width': [
+                'case',
+                ['boolean', ['feature-state', 'selected'], false],
+                3,
+                2
+            ]
         }
     });
 
@@ -348,42 +374,20 @@ export function selectEventGeometry(event, {fitBounds = true} = {}) {
     }
 
     const alreadySelected = String(selectedZoningId) === String(event.id);
+    const previousSelectedId = selectedZoningId;
     setSelectedEvent(event.id, {clearGeometry: false});
 
     if (!alreadySelected) {
-        const data = {
-            type: 'FeatureCollection',
-            features: [{
-                type: 'Feature',
-                properties: {id: event.id},
-                geometry: event.geometry
-            }]
-        };
-        const source = map.getSource('selected-zoning');
-
-        if (source) {
-            source.setData(data);
-        } else {
-            map.addSource('selected-zoning', {type: 'geojson', data});
-            map.addLayer({
-                id: 'selected-zoning-fill',
-                type: 'fill',
-                source: 'selected-zoning',
-                paint: {
-                    'fill-color': '#344F1F',
-                    'fill-opacity': 0.35
-                }
-            });
-            map.addLayer({
-                id: 'selected-zoning-outline',
-                type: 'line',
-                source: 'selected-zoning',
-                paint: {
-                    'line-color': '#344F1F',
-                    'line-width': 3
-                }
-            });
+        if (previousSelectedId !== null) {
+            map.setFeatureState(
+                {source: 'event-geometry', id: String(previousSelectedId)},
+                {selected: false}
+            );
         }
+        map.setFeatureState(
+            {source: 'event-geometry', id: String(event.id)},
+            {selected: true}
+        );
     }
 
     if (fitBounds) {
@@ -406,12 +410,11 @@ export function setSelectedEvent(id, {clearGeometry = true} = {}) {
 }
 
 function clearSelectedZoning() {
-    const source = map.getSource('selected-zoning');
-    if (source) {
-        source.setData({
-            type: 'FeatureCollection',
-            features: []
-        });
+    if (selectedZoningId !== null && map.getSource('event-geometry')) {
+        map.setFeatureState(
+            {source: 'event-geometry', id: String(selectedZoningId)},
+            {selected: false}
+        );
     }
     selectedZoningId = null;
 }

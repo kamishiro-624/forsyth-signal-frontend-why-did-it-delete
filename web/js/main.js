@@ -7,7 +7,7 @@ import {
     flyTo,
     isMapReady,
     setSelectedEvent
-} from './map.js?v=map-selection-zoom';
+} from './map.js?v=fast-polygon-selection';
 
 import {
     setEvents,
@@ -17,7 +17,7 @@ import {
     setSearch,
     selectEvent,
     renderEvents
-} from './events.js?v=unique-event-keys';
+} from './events.js?v=unique-event-keys-polygon-perf';
 
 import {
     initializeSearch
@@ -405,9 +405,7 @@ mobilePanelButtons.forEach(button => {
 });
 document.querySelectorAll('.panel-close').forEach(button => {
     button.addEventListener('click', () => {
-        if (button.closest('#details-panel')) {
-            clearEventSelection();
-        }
+        clearEventSelection();
         setMobilePanel(null);
     });
 });
