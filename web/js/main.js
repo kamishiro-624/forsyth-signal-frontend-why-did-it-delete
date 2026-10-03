@@ -47,6 +47,7 @@ function render() {
 }
 
 function showEvent(event) {
+    document.getElementById('event-group-panel').hidden = true;
     selectEvent(event.id);
     setSelectedEvent(event.id);
     detailsContainer.innerHTML = `

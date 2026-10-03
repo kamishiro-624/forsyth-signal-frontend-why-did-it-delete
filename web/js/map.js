@@ -140,8 +140,11 @@ export function addEventMarkers(events, onEventSelect) {
             .setLngLat(coordinates)
             .addTo(map);
         const markerElement = marker.getElement();
+        markerElement.setAttribute('role', 'button');
+        markerElement.tabIndex = 0;
 
         if (eventsAtLocation.length > 1) {
+            markerElement.classList.add('has-event-group');
             const count = document.createElement('span');
             count.className = 'event-marker-count';
             count.textContent = String(eventsAtLocation.length);
@@ -152,14 +155,28 @@ export function addEventMarkers(events, onEventSelect) {
                 `${eventsAtLocation.length} events at this exact location`
             );
             markerElement.title = `${eventsAtLocation.length} events at this exact location`;
+        } else {
+            markerElement.setAttribute('aria-label', eventsAtLocation[0].title);
+            markerElement.title = eventsAtLocation[0].title;
         }
 
-        markerElement.addEventListener('click', clickEvent => {
+        const selectMarkerEvents = clickEvent => {
             clickEvent.stopPropagation();
             if (eventsAtLocation.length === 1) {
                 onEventSelect(eventsAtLocation[0]);
             } else {
+                for (const {marker: otherMarker} of eventMarkers) {
+                    otherMarker.getElement().classList.remove('is-group-open');
+                }
+                markerElement.classList.add('is-selected', 'is-group-open');
                 showEventChooser(eventsAtLocation, onEventSelect, 'Events at this location');
+            }
+        };
+        markerElement.addEventListener('click', selectMarkerEvents, {capture: true});
+        markerElement.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                selectMarkerEvents(event);
             }
         });
 
@@ -181,6 +198,11 @@ function showEventChooser(events, onEventSelect, headingText) {
     count.textContent = `${events.length} events · ordered by date`;
     list.replaceChildren();
 
+    const instruction = document.createElement('p');
+    instruction.className = 'event-group-instruction';
+    instruction.textContent = 'Choose an event to open its full details.';
+    list.appendChild(instruction);
+
     for (const event of events) {
         const button = document.createElement('button');
         button.type = 'button';
@@ -200,7 +222,7 @@ function showEventChooser(events, onEventSelect, headingText) {
         }
 
         button.addEventListener('click', () => {
-            panel.hidden = true;
+            closeEventChooser();
             onEventSelect(event);
         });
         list.appendChild(button);
@@ -208,11 +230,42 @@ function showEventChooser(events, onEventSelect, headingText) {
 
     panel.hidden = false;
     list.scrollTop = 0;
-    document.getElementById('event-group-close').focus();
+    document.getElementById('event-group-close').focus({preventScroll: true});
+}
+
+function closeEventChooser() {
+    const panel = document.getElementById('event-group-panel');
+    if (panel && !panel.hidden) {
+        panel.hidden = true;
+    }
+    for (const {events, marker} of eventMarkers) {
+        const markerElement = marker.getElement();
+        markerElement.classList.remove('is-group-open');
+        markerElement.classList.toggle(
+            'is-selected',
+            events.some(event => String(event.id) === String(selectedZoningId))
+        );
+    }
 }
 
 document.getElementById('event-group-close')?.addEventListener('click', () => {
-    document.getElementById('event-group-panel').hidden = true;
+    closeEventChooser();
+});
+
+document.addEventListener('click', event => {
+    if (!(event.target instanceof Element) ||
+        !event.target.closest('#map .maplibregl-canvas')) {
+        return;
+    }
+
+    const clickOnMarker = eventMarkers.some(({marker}) => {
+        const bounds = marker.getElement().getBoundingClientRect();
+        return event.clientX >= bounds.left && event.clientX <= bounds.right &&
+            event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+    });
+    if (!clickOnMarker) {
+        closeEventChooser();
+    }
 });
 
 export function addEventGeometry(events, onEventSelect) {
@@ -266,20 +319,11 @@ export function addEventGeometry(events, onEventSelect) {
             return;
         }
 
-        const candidateIds = [...new Set(event.features.map(feature => String(feature.properties.id)))];
-        const candidates = candidateIds
-            .map(id => geometryEvents.find(item => String(item.id) === id))
-            .filter(Boolean);
-        if (candidates.length === 0) {
-            return;
+        const selectedId = String(event.features[0].properties.id);
+        const selectedEvent = geometryEvents.find(item => String(item.id) === selectedId);
+        if (selectedEvent) {
+            onEventSelect(selectedEvent);
         }
-
-        if (candidates.length === 1) {
-            onEventSelect(candidates[0]);
-            return;
-        }
-
-        showEventChooser(candidates, onEventSelect, 'Events in this area');
     });
 
     map.on('mouseenter', 'event-geometry-fill', () => {
@@ -354,6 +398,7 @@ export function setSelectedEvent(id) {
             events.some(event => String(event.id) === String(id))
         );
     }
+    closeEventChooser();
 }
 
 function clearSelectedZoning() {
