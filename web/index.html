@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <link rel="preconnect" href="https://tile.openstreetmap.org">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.css">
-    <link rel="stylesheet" href="styles.css?v=mobile-map-controls">
+    <link rel="stylesheet" href="styles.css?v=sticky-event-scroll-hints">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@100..900&display=swap" rel="stylesheet">
@@ -54,9 +54,9 @@
                     <button class="search-clear" type="button" aria-label="Clear event search" hidden>×</button>
                 </div>
                 <div id="event-count" role="status" aria-live="polite"></div>
+                <button id="events-back-to-top" type="button">↑ Back to top</button>
                 <div id="event-list-container">
                     <div id="events"></div>
-                    <button id="events-back-to-top" type="button">↑ Back to top</button>
                 </div>
             </aside>
 
@@ -73,20 +73,29 @@
                     <button type="button" data-panel="details-panel" aria-controls="details-panel" aria-expanded="false">Details</button>
                 </div>
                 <div id="address-panel">
-                    <div class="address-heading">What affects me?</div>
-
-                    <div class="address-description">
-                        Enter an address to find nearby events,
-                        developments, and public meetings.
+                    <div class="address-panel-header">
+                        <div class="address-heading">What affects me?</div>
+                        <div class="address-panel-actions">
+                            <button id="address-minimize" type="button" aria-label="Minimize What affects me" aria-expanded="true">−</button>
+                            <button id="address-close" type="button" aria-label="Close What affects me">×</button>
+                        </div>
                     </div>
 
-                    <div class="address-input-row">
-                        <input id="address-search" type="search" placeholder="Enter an address...">
-                        <button id="address-submit">Find</button>
-                    </div>
+                    <div class="address-content">
+                        <div class="address-description">
+                            Enter an address to find nearby events,
+                            developments, and public meetings.
+                        </div>
 
-                    <div id="address-results"></div>
+                        <div class="address-input-row">
+                            <input id="address-search" type="search" placeholder="Enter an address...">
+                            <button id="address-submit">Find</button>
+                        </div>
+
+                        <div id="address-results"></div>
+                    </div>
                 </div>
+                <button id="address-reopen" type="button" aria-label="Open What affects me" hidden>What affects me?</button>
 
                 <section id="event-group-panel" aria-labelledby="event-group-title" hidden>
                     <header class="event-group-header">

@@ -60,6 +60,7 @@ export async function initializeMap(onEventSelect) {
             : [-84.14, 34.21],
         zoom: lastPosition ? 14 : 10
     });
+    map.scrollZoom.setWheelZoomRate(1 / 600);
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -229,6 +230,7 @@ function showEventChooser(events, onEventSelect, headingText) {
     }
 
     panel.hidden = false;
+    document.getElementById('main').classList.add('has-event-chooser');
     list.scrollTop = 0;
     document.getElementById('event-group-close').focus({preventScroll: true});
 }
@@ -238,6 +240,7 @@ function closeEventChooser() {
     if (panel && !panel.hidden) {
         panel.hidden = true;
     }
+    document.getElementById('main').classList.remove('has-event-chooser');
     for (const {events, marker} of eventMarkers) {
         const markerElement = marker.getElement();
         markerElement.classList.remove('is-group-open');
@@ -340,6 +343,7 @@ export function selectEventGeometry(event) {
         return;
     }
 
+    const alreadySelected = String(selectedZoningId) === String(event.id);
     setSelectedEvent(event.id);
 
     const data = {
@@ -358,7 +362,9 @@ export function selectEventGeometry(event) {
     const source = map.getSource('selected-zoning');
 
     if (source) {
-        source.setData(data);
+        if (!alreadySelected) {
+            source.setData(data);
+        }
     } else {
         map.addSource('selected-zoning', {
             type: 'geojson',
@@ -390,7 +396,9 @@ export function selectEventGeometry(event) {
 }
 
 export function setSelectedEvent(id) {
-    clearSelectedZoning();
+    if (String(selectedZoningId) !== String(id)) {
+        clearSelectedZoning();
+    }
     selectedZoningId = id;
     for (const {events, marker} of eventMarkers) {
         marker.getElement().classList.toggle(
@@ -418,7 +426,7 @@ function zoomToGeometry(geometry) {
     addGeometryToBounds(geometry, bounds);
 
     if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, {padding: 80, maxZoom: 15});
+        map.fitBounds(bounds, {padding: 80, maxZoom: 15, duration: 700});
     }
 }
 
@@ -462,7 +470,7 @@ function addCoordinatesToBounds(coordinates, bounds) {
 }
 
 export function flyTo(latitude, longitude, zoom=14) {
-    map.flyTo({center: [longitude, latitude], zoom});
+    map.easeTo({center: [longitude, latitude], zoom, duration: 650});
 }
 
 export function addAddressMarker(latitude, longitude) {

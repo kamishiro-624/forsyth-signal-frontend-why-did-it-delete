@@ -167,13 +167,29 @@ function appendEventBatch(container, countContainer) {
 
 let onSelectEvent = () => {};
 
-document.getElementById('events')?.addEventListener('scroll', event => {
+function appendEventsNearBottom(event) {
+    if (renderedEventCount >= visibleEvents.length) {
+        return;
+    }
+
     const container = event.currentTarget;
-    if (renderedEventCount < visibleEvents.length &&
-        container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
+    if (container.id === 'events-panel') {
+        if (event.target !== container) {
+            return;
+        }
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
+            appendEventBatch(document.getElementById('events'), document.getElementById('event-count'));
+        }
+        return;
+    }
+
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
         appendEventBatch(container, document.getElementById('event-count'));
     }
-});
+}
+
+document.getElementById('events')?.addEventListener('scroll', appendEventsNearBottom);
+document.getElementById('events-panel')?.addEventListener('scroll', appendEventsNearBottom);
 
 document.getElementById('events')?.addEventListener('click', event => {
     const index = Number(event.target.closest('.event')?.dataset.eventIndex);

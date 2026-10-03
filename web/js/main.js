@@ -16,7 +16,7 @@ import {
     setSearch,
     selectEvent,
     renderEvents
-} from './events.js';
+} from './events.js?v=whole-events-scroll';
 
 import {
     initializeSearch
@@ -46,10 +46,29 @@ function render() {
     renderEvents(eventsContainer, eventCount, showEvent);
 }
 
-function showEvent(event) {
+function showEvent(event, source = 'list') {
     document.getElementById('event-group-panel').hidden = true;
     selectEvent(event.id);
-    setSelectedEvent(event.id);
+
+    if (source === 'map') {
+        const state = event.state;
+        if (state) {
+            setState(state);
+            document.querySelectorAll('.event-tab').forEach(button => {
+                button.classList.toggle('is-active', button.dataset.state === state);
+            });
+        }
+
+        const categoryOption = [...categoryFilter.options]
+            .find(option => option.value === event.category);
+        const category = categoryOption ? event.category : 'all';
+        setCategory(category);
+        categoryFilter.value = category;
+        setSearch('');
+        searchInput.value = '';
+        searchInput.parentElement.querySelector('.search-clear').hidden = true;
+    }
+
     detailsContainer.innerHTML = `
         <div class='details-category'>
             ${event.category}
@@ -138,18 +157,27 @@ function showEvent(event) {
         }
     `;
 
-    if (isMapReady()) {
-        if (event.geometry !== null && event.geometry !== undefined) {
+    if (event.geometry !== null && event.geometry !== undefined) {
+        if (isMapReady()) {
             selectEventGeometry(event);
-        } else if (event.latitude !== null && event.longitude !== null) {
+        } else {
+            setSelectedEvent(event.id);
+        }
+    } else {
+        setSelectedEvent(event.id);
+        if (isMapReady() && event.latitude !== null && event.longitude !== null) {
             flyTo(event.latitude, event.longitude);
         }
     }
 
     render();
     if (window.matchMedia('(max-width: 900px)').matches) {
-        setMobilePanel('details-panel', false);
+        setMobilePanel(source === 'map' ? 'events-panel' : 'details-panel', false);
     }
+}
+
+function showMapEvent(event) {
+    showEvent(event, 'map');
 }
 
 function getWhyItMatters(event) {
@@ -200,8 +228,8 @@ function syncMapEvents() {
     }
 
     mapEventsRendered = true;
-    addEventGeometry(allEvents, showEvent);
-    addEventMarkers(allEvents, showEvent);
+    addEventGeometry(allEvents, showMapEvent);
+    addEventMarkers(allEvents, showMapEvent);
 }
 
 function applyEvents(events) {
@@ -319,7 +347,7 @@ window.addEventListener('location-selected', event => {
 
 window.onMapReady = syncMapEvents;
 
-initializeMap(showEvent).catch(error => {
+initializeMap(showMapEvent).catch(error => {
     console.error('Failed to initialize map:', error);
     const message = document.createElement('div');
     message.className = 'map-error';
@@ -348,11 +376,138 @@ function setMobilePanel(panelId, toggle = true) {
 }
 
 mobilePanelButtons.forEach(button => {
-    button.addEventListener('click', () => setMobilePanel(button.dataset.panel));
+    button.addEventListener('click', () => {
+        if (document.getElementById('details-panel').classList.contains('is-open')) {
+            clearEventSelection();
+        }
+        setMobilePanel(button.dataset.panel);
+    });
 });
 document.querySelectorAll('.panel-close').forEach(button => {
-    button.addEventListener('click', () => setMobilePanel(null));
+    button.addEventListener('click', () => {
+        if (button.closest('#details-panel')) {
+            clearEventSelection();
+        }
+        setMobilePanel(null);
+    });
 });
+
+function enableMobilePanelDragging(panelId, handleId) {
+    const panel = document.getElementById(panelId);
+    const handle = document.getElementById(handleId);
+    const snapRatios = [0.35, 0.62, 1];
+    let activePointerId = null;
+    let startY = 0;
+    let startHeight = 0;
+    let lastY = 0;
+    let lastTime = 0;
+    let velocity = 0;
+
+    handle.addEventListener('pointerdown', event => {
+        if (!window.matchMedia('(max-width: 900px)').matches ||
+            event.button !== 0 ||
+            event.target.closest('button')) {
+            return;
+        }
+
+        activePointerId = event.pointerId;
+        startY = event.clientY;
+        lastY = event.clientY;
+        lastTime = event.timeStamp;
+        startHeight = panel.getBoundingClientRect().height;
+        velocity = 0;
+        panel.style.setProperty('--panel-height', `${startHeight}px`);
+        handle.setPointerCapture(event.pointerId);
+        panel.classList.add('is-dragging');
+    });
+
+    handle.addEventListener('pointermove', event => {
+        if (event.pointerId !== activePointerId) {
+            return;
+        }
+
+        const deltaTime = event.timeStamp - lastTime;
+        if (deltaTime > 0) {
+            velocity = (event.clientY - lastY) / deltaTime;
+        }
+        lastY = event.clientY;
+        lastTime = event.timeStamp;
+
+        const maxHeight = Math.max(180, panel.parentElement.clientHeight - 180);
+        const height = Math.max(180, Math.min(maxHeight, startHeight + startY - event.clientY));
+        panel.style.setProperty('--panel-height', `${height}px`);
+    });
+
+    const finishDragging = event => {
+        if (event.pointerId !== activePointerId) {
+            return;
+        }
+
+        activePointerId = null;
+        panel.classList.remove('is-dragging');
+        const maxHeight = Math.max(180, panel.parentElement.clientHeight - 180);
+        const dragDistance = event.clientY - startY;
+        const momentum = Math.abs(dragDistance) > 40
+            ? Math.max(-0.8, Math.min(0.8, velocity)) * 100
+            : 0;
+        const projectedHeight = Math.max(
+            180,
+            Math.min(maxHeight, panel.getBoundingClientRect().height - momentum)
+        );
+        const snapHeights = snapRatios.map(ratio => Math.min(maxHeight, maxHeight * ratio));
+        const snapHeight = snapHeights.reduce((closest, height) =>
+            Math.abs(height - projectedHeight) < Math.abs(closest - projectedHeight)
+                ? height
+                : closest
+        );
+        panel.style.setProperty('--panel-height', `${snapHeight}px`);
+    };
+
+    handle.addEventListener('pointerup', finishDragging);
+    handle.addEventListener('pointercancel', finishDragging);
+}
+
+enableMobilePanelDragging('events-panel', 'events-header');
+enableMobilePanelDragging('details-panel', 'details-header');
+
+function clearEventSelection() {
+    selectEvent(null);
+    setSelectedEvent(null);
+    detailsContainer.innerHTML = '<p>Select an event</p>';
+    render();
+}
+
 document.getElementById('events-back-to-top').addEventListener('click', () => {
-    document.getElementById('events').scrollTo({top: 0, behavior: 'smooth'});
+    const eventsPanel = document.getElementById('events-panel');
+    if (window.matchMedia('(max-width: 900px)').matches) {
+        eventsPanel.scrollTo({top: 0, behavior: 'smooth'});
+    } else {
+        document.getElementById('events').scrollTo({top: 0, behavior: 'smooth'});
+    }
+});
+
+const addressPanel = document.getElementById('address-panel');
+const addressReopen = document.getElementById('address-reopen');
+
+document.getElementById('address-minimize').addEventListener('click', event => {
+    const minimized = addressPanel.classList.toggle('is-minimized');
+    event.currentTarget.setAttribute('aria-expanded', String(!minimized));
+    event.currentTarget.setAttribute(
+        'aria-label',
+        minimized ? 'Expand What affects me' : 'Minimize What affects me'
+    );
+});
+
+document.getElementById('address-close').addEventListener('click', () => {
+    addressPanel.hidden = true;
+    addressReopen.hidden = false;
+});
+
+addressReopen.addEventListener('click', () => {
+    addressPanel.hidden = false;
+    addressPanel.classList.remove('is-minimized');
+    const minimizeButton = document.getElementById('address-minimize');
+    minimizeButton.setAttribute('aria-expanded', 'true');
+    minimizeButton.setAttribute('aria-label', 'Minimize What affects me');
+    addressReopen.hidden = true;
 });

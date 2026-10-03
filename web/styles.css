@@ -17,6 +17,13 @@
     font-style: normal;
 }
 
+.event-group-instruction {
+    margin: 0;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    line-height: 1.4;
+}
+
 html, body {
     width: 100%;
     height: 100%;
@@ -92,6 +99,8 @@ html, body {
     flex: 1;
     min-width: 0;
     min-height: 0;
+    z-index: 0;
+    isolation: isolate;
 }
 
 #map {
@@ -342,7 +351,7 @@ html, body {
     position: absolute;
     top: 50%;
     right: 16px;
-    z-index: 15;
+    z-index: 1300;
     display: flex;
     flex-direction: column;
     width: min(380px, calc(100% - 32px));
@@ -450,13 +459,90 @@ html, body {
     position: absolute;
     top: 12px;
     left: 12px;
-    z-index: 10;
+    z-index: 1200;
     width: 290px;
     max-width: calc(100% - 24px);
 }
 
 #map-search .search-field {
     box-shadow: var(--shadow);
+}
+
+.address-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.address-panel-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 2px;
+}
+
+.address-panel-actions button {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    place-items: center;
+    color: var(--green);
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    font: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+.address-panel-actions button:hover,
+.address-panel-actions button:focus-visible {
+    color: var(--green-dark);
+    background-color: rgba(52, 79, 31, 0.12);
+}
+
+.address-panel-actions button:active {
+    background-color: rgba(244, 153, 26, 0.28);
+    transform: scale(0.9);
+}
+
+.address-panel-actions button:focus-visible {
+    outline: 2px solid var(--orange);
+}
+
+#address-panel.is-minimized .address-content {
+    display: none;
+}
+
+#address-reopen {
+    position: absolute;
+    bottom: 20px;
+    left: 12px;
+    z-index: 1200;
+    min-height: 44px;
+    padding: 8px 14px;
+    color: var(--white);
+    background: var(--green);
+    border: 1px solid var(--white);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+#address-reopen:hover,
+#address-reopen:focus-visible {
+    background: var(--green-dark);
+}
+
+#address-reopen:active {
+    transform: scale(0.97);
 }
 
 #location-search:focus {
@@ -652,17 +738,12 @@ html, body {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23344F1F' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 10px center;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
-}
-
-#category-filter:hover {
-    background-color: #fffdf8;
+    -webkit-tap-highlight-color: transparent;
 }
 
 #category-filter:focus-visible {
-    outline: none;
-    border-color: var(--green);
-    box-shadow: 0 0 0 3px rgba(244, 153, 26, 0.3);
+    outline: 2px solid var(--orange);
+    outline-offset: 2px;
 }
 
 .event-summary {
@@ -701,7 +782,7 @@ html, body {
     position: absolute;
     left: 12px;
     bottom: 20px;
-    z-index: 10;
+    z-index: 1200;
     width: 340px;
     max-width: calc(100% - 24px);
     padding: 14px;
@@ -848,7 +929,7 @@ html, body {
     }
 
     #map-search {
-        top: 62px;
+        top: 8px;
         left: 10px;
         width: calc(100% - 20px);
         max-width: none;
@@ -856,10 +937,10 @@ html, body {
 
     #mobile-panel-controls {
         position: absolute;
-        top: 8px;
+        top: 62px;
         right: auto;
         left: 50%;
-        z-index: 11;
+        z-index: 1200;
         display: flex;
         align-items: center;
         gap: 2px;
@@ -897,8 +978,9 @@ html, body {
     }
 
     #map-container .maplibregl-ctrl-top-right {
-        top: 110px;
+        top: 112px;
         right: 8px;
+        z-index: 1200;
     }
 
     #events-panel.mobile-panel,
@@ -920,22 +1002,64 @@ html, body {
         box-shadow: 0 -5px 20px rgba(32, 32, 32, 0.16);
         opacity: 0;
         pointer-events: none;
+        --panel-height: min(44dvh, 380px);
         transform: translateY(6px);
-        transition: opacity 140ms ease, transform 140ms ease, visibility 140ms;
+        transition: height 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 140ms ease, transform 140ms ease, visibility 140ms;
     }
 
     #events-panel.mobile-panel.is-open,
     #details-panel.mobile-panel.is-open {
+        height: min(var(--panel-height), calc(100% - 120px));
         visibility: visible;
         opacity: 1;
         pointer-events: auto;
         transform: translateY(0);
     }
 
+    #main.has-event-chooser #events-panel.mobile-panel.is-open,
+    #main.has-event-chooser #details-panel.mobile-panel.is-open {
+        transform: translateY(96px);
+    }
+
+    #events-panel.is-dragging,
+    #details-panel.is-dragging {
+        transition: none;
+    }
+
+    #events-panel.mobile-panel {
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line-strong) transparent;
+    }
+
+    #details-panel.mobile-panel {
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line-strong) transparent;
+    }
+
+    #events-header,
+    #details-header {
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+    }
+
+    #events-panel.is-dragging #events-header,
+    #details-panel.is-dragging #details-header {
+        cursor: grabbing;
+    }
+
     #event-list-container {
         display: flex;
-        flex: 1 1 0%;
-        min-height: 0;
+        flex: 0 0 auto;
+        min-height: auto;
         flex-direction: column;
     }
 
@@ -983,18 +1107,18 @@ html, body {
 
     #events {
         height: auto;
-        flex: 1 1 0%;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
+        flex: 0 0 auto;
+        min-height: auto;
+        overflow: visible;
         padding-bottom: 64px;
     }
 
     #events-back-to-top {
-        position: absolute;
+        position: sticky;
+        align-self: flex-end;
+        margin: -56px 12px 12px 0;
+        top: calc(100% - 60px);
         right: 12px;
-        bottom: 12px;
         z-index: 2;
         display: inline-flex;
         align-items: center;
@@ -1019,11 +1143,9 @@ html, body {
     }
 
     #details-panel #details {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
+        flex: 0 0 auto;
+        min-height: auto;
+        overflow: visible;
     }
 
     .mobile-scroll-hint {
@@ -1046,10 +1168,29 @@ html, body {
 
     #events-header,
     #details-header {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--white);
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 6px 12px 2px;
+    }
+
+    #details-panel > .mobile-scroll-hint {
+        position: sticky;
+        top: 52px;
+        z-index: 2;
+        flex-shrink: 0;
+    }
+
+    #events-panel > .mobile-scroll-hint {
+        position: sticky;
+        top: 52px;
+        z-index: 2;
+        flex-shrink: 0;
+        background: var(--muted);
     }
 
     #events-header h2,
@@ -1087,6 +1228,16 @@ html, body {
     }
 
     #map-container.has-open-panel #address-panel {
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #address-reopen {
+        bottom: max(10px, env(safe-area-inset-bottom));
+    }
+
+    #map-container.has-open-panel #address-reopen {
         visibility: hidden;
         opacity: 0;
         pointer-events: none;
