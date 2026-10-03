@@ -7,7 +7,7 @@ import {
     flyTo,
     isMapReady,
     setSelectedEvent
-} from './map.js?v=fast-polygon-selection';
+} from './map.js?v=single-zone-selection';
 
 import {
     setEvents,

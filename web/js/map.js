@@ -1,6 +1,7 @@
 let maplibregl;
 let map;
 let selectedZoningId = null;
+const selectedGeometryIds = new Set();
 let mapReady = false;
 let geometryEvents = [];
 let eventMarkers = [];
@@ -373,21 +374,23 @@ export function selectEventGeometry(event, {fitBounds = true} = {}) {
         return;
     }
 
-    const alreadySelected = String(selectedZoningId) === String(event.id);
-    const previousSelectedId = selectedZoningId;
+    const selectedId = String(event.id);
+    const alreadySelected = selectedGeometryIds.has(selectedId);
     setSelectedEvent(event.id, {clearGeometry: false});
 
     if (!alreadySelected) {
-        if (previousSelectedId !== null) {
+        for (const previousId of selectedGeometryIds) {
             map.setFeatureState(
-                {source: 'event-geometry', id: String(previousSelectedId)},
+                {source: 'event-geometry', id: previousId},
                 {selected: false}
             );
         }
         map.setFeatureState(
-            {source: 'event-geometry', id: String(event.id)},
+            {source: 'event-geometry', id: selectedId},
             {selected: true}
         );
+        selectedGeometryIds.clear();
+        selectedGeometryIds.add(selectedId);
     }
 
     if (fitBounds) {
@@ -410,12 +413,15 @@ export function setSelectedEvent(id, {clearGeometry = true} = {}) {
 }
 
 function clearSelectedZoning() {
-    if (selectedZoningId !== null && map.getSource('event-geometry')) {
-        map.setFeatureState(
-            {source: 'event-geometry', id: String(selectedZoningId)},
-            {selected: false}
-        );
+    if (map.getSource('event-geometry')) {
+        for (const id of selectedGeometryIds) {
+            map.setFeatureState(
+                {source: 'event-geometry', id},
+                {selected: false}
+            );
+        }
     }
+    selectedGeometryIds.clear();
     selectedZoningId = null;
 }
 
