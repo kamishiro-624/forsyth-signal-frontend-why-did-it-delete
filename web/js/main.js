@@ -3,8 +3,11 @@ import {
     addEventMarkers,
     addEventGeometry,
     selectEventGeometry,
-    flyTo
-} from './map.js';
+    getMap,
+    flyTo,
+    isMapReady,
+    setSelectedEvent
+} from './map.js?v=group-switch-selection';
 
 import {
     setEvents,
@@ -14,15 +17,16 @@ import {
     setSearch,
     selectEvent,
     renderEvents
-} from './events.js';
+} from './events.js?v=unique-event-keys-polygon-perf';
 
 import {
     initializeSearch
 } from './search.js';
 
 import {
-    initializeAddressSearch
-} from './address.js';
+    initializeAddressSearch,
+    setAddressEvents
+} from './address.js?v=clickable-nearby-events';
 
 const eventsContainer = document.getElementById('events');
 const detailsContainer = document.getElementById('details');
@@ -34,13 +38,39 @@ const addressSubmit = document.getElementById('address-submit');
 const addressResults = document.getElementById('address-results');
 
 let allEvents = [];
+let addressSearchInitialized = false;
+let mapEventsRendered = false;
+const EVENTS_CACHE_NAME = 'forsyth-signal-events-v1';
+const EVENTS_CACHE_URL = '/api/events';
 
 function render() {
     renderEvents(eventsContainer, eventCount, showEvent);
 }
 
-function showEvent(event) {
+function showEvent(event, source = 'list', mapLocation = null) {
+    document.getElementById('event-group-panel').hidden = true;
     selectEvent(event.id);
+    const isMapSelection = source.startsWith('map-');
+
+    if (isMapSelection) {
+        const state = event.state;
+        if (state) {
+            setState(state);
+            document.querySelectorAll('.event-tab').forEach(button => {
+                button.classList.toggle('is-active', button.dataset.state === state);
+            });
+        }
+
+        const categoryOption = [...categoryFilter.options]
+            .find(option => option.value === event.category);
+        const category = categoryOption ? event.category : 'all';
+        setCategory(category);
+        categoryFilter.value = category;
+        setSearch('');
+        searchInput.value = '';
+        searchInput.parentElement.querySelector('.search-clear').hidden = true;
+    }
+
     detailsContainer.innerHTML = `
         <div class='details-category'>
             ${event.category}
@@ -130,12 +160,44 @@ function showEvent(event) {
     `;
 
     if (event.geometry !== null && event.geometry !== undefined) {
-        selectEventGeometry(event);
-    } else if (event.latitude !== null && event.longitude !== null) {
+        if (isMapReady()) {
+            selectEventGeometry(event, {fitBounds: !isMapSelection});
+        } else {
+            setSelectedEvent(event.id);
+        }
+    }
+
+    if (isMapReady() && source === 'map-zone' && mapLocation) {
+        zoomToMapLocation(mapLocation);
+    } else if (isMapReady() && source === 'map-marker' &&
+        event.latitude !== null && event.longitude !== null) {
         flyTo(event.latitude, event.longitude);
+    } else if (!event.geometry) {
+        setSelectedEvent(event.id);
+        if (isMapReady() && !isMapSelection &&
+            event.latitude !== null && event.longitude !== null) {
+            flyTo(event.latitude, event.longitude);
+        }
     }
 
     render();
+    if (window.matchMedia('(max-width: 900px)').matches) {
+        setMobilePanel(isMapSelection ? 'events-panel' : 'details-panel', false);
+    }
+}
+
+function showMapEvent(event, source = 'map-marker', mapLocation = null) {
+    showEvent(event, source, mapLocation);
+}
+
+function zoomToMapLocation(location) {
+    const map = getMap();
+    const currentZoom = map.getZoom();
+    map.easeTo({
+        center: location,
+        zoom: Math.min(16, Math.max(currentZoom + 1.5, 14)),
+        duration: 550
+    });
 }
 
 function getWhyItMatters(event) {
@@ -180,26 +242,23 @@ function escapeAttribute(value) {
     return String(value ?? '').replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-async function loadEvents() {
-    try {
-        const response = await fetch('/api/events');
+function syncMapEvents() {
+    if (!isMapReady() || mapEventsRendered || allEvents.length === 0) {
+        return;
+    }
 
-        if (!response.ok) {
-            throw new Error(`API returned: ${response.status}`);
-        }
+    mapEventsRendered = true;
+    addEventGeometry(allEvents, showMapEvent);
+    addEventMarkers(allEvents, showMapEvent);
+}
 
-        allEvents = await response.json();
+function applyEvents(events) {
+    allEvents = events;
+    setEvents(allEvents);
+    allEvents = getEvents();
+    render();
 
-        setEvents(allEvents);
-
-        allEvents = getEvents();
-
-        addEventMarkers(allEvents, showEvent);
-
-        addEventGeometry(allEvents, showEvent);
-
-        render();
-
+    if (!addressSearchInitialized) {
         initializeAddressSearch({
             input: addressSearch,
             button: addressSubmit,
@@ -207,29 +266,89 @@ async function loadEvents() {
             events: allEvents,
             onEventSelect: showEvent
         });
+        addressSearchInitialized = true;
+    } else {
+        setAddressEvents(allEvents);
+    }
+
+    if (isMapReady()) {
+        mapEventsRendered = false;
+        syncMapEvents();
+    }
+}
+
+async function loadEvents() {
+    const eventsRequest = fetch(EVENTS_CACHE_URL, {cache: 'no-cache'}).then(
+        response => ({response}),
+        error => ({error})
+    );
+
+    try {
+        if ('caches' in window) {
+            const cache = await caches.open(EVENTS_CACHE_NAME);
+            const cachedResponse = await cache.match(EVENTS_CACHE_URL);
+            if (cachedResponse) {
+                const events = await cachedResponse.json();
+                if (!Array.isArray(events)) {
+                    throw new Error('Cached event data is not an array');
+                }
+                applyEvents(events);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to read cached events:', error);
+    }
+
+    try {
+        const result = await eventsRequest;
+        if (result.error) {
+            throw result.error;
+        }
+        const response = result.response;
+
+        if (!response.ok) {
+            throw new Error(`API returned: ${response.status}`);
+        }
+
+        const responseForCache = response.clone();
+        const events = await response.json();
+        if (!Array.isArray(events)) {
+            throw new Error('Events API returned an invalid response');
+        }
+        applyEvents(events);
+        if ('caches' in window) {
+            try {
+                const cache = await caches.open(EVENTS_CACHE_NAME);
+                await cache.put(EVENTS_CACHE_URL, responseForCache);
+            } catch (error) {
+                console.error('Failed to cache events:', error);
+            }
+        }
     } catch (error) {
         console.error('Failed to load events:', error);
 
-        eventsContainer.innerHTML = `
-            <div class='error'>
-                Failed to load events.
-            </div>
-        `;
+        if (allEvents.length === 0) {
+            eventsContainer.innerHTML = `
+                <div class='error'>
+                    Failed to load events.
+                </div>
+            `;
+        }
     }
 }
 
 document.querySelectorAll('.event-tab').forEach(button => {
     button.addEventListener('click', () => {
-            document.querySelectorAll('.event-tab').forEach(other => other.classList.remove('is-active'));
-            button.classList.add('is-active');
-            setState(button.dataset.state);
-            render();
+        document.querySelectorAll('.event-tab').forEach(other => other.classList.remove('is-active'));
+        button.classList.add('is-active');
+        setState(button.dataset.state);
+        render();
     });
 });
 
 categoryFilter.addEventListener('change', () => {
-        setCategory(categoryFilter.value);
-        render();
+    setCategory(categoryFilter.value);
+    render();
 });
 
 initializeSearch({
@@ -240,9 +359,171 @@ initializeSearch({
 });
 
 window.addEventListener('location-selected', event => {
-        flyTo(event.detail.latitude, event.detail.longitude);
+    flyTo(event.detail.latitude, event.detail.longitude);
+    const locationSearch = document.getElementById('location-search');
+    locationSearch.value = event.detail.name;
+    locationSearch.parentElement.querySelector('.search-clear').hidden = false;
 });
 
-window.onMapReady = loadEvents;
+window.onMapReady = syncMapEvents;
 
-initializeMap(showEvent);
+initializeMap(showMapEvent).catch(error => {
+    console.error('Failed to initialize map:', error);
+    const message = document.createElement('div');
+    message.className = 'map-error';
+    message.textContent = 'The map could not be loaded. Events are still available in the list.';
+    document.getElementById('map-container').appendChild(message);
+});
+loadEvents();
+
+const mapContainer = document.getElementById('map-container');
+const mobilePanelButtons = document.querySelectorAll('#mobile-panel-controls [data-panel]');
+
+function setMobilePanel(panelId, toggle = true) {
+    const open = panelId && (
+        !toggle || !document.getElementById(panelId).classList.contains('is-open')
+    );
+    document.querySelectorAll('.mobile-panel').forEach(panel => panel.classList.remove('is-open'));
+    mobilePanelButtons.forEach(button => {
+        const isActive = open && button.dataset.panel === panelId;
+        button.setAttribute('aria-expanded', String(Boolean(isActive)));
+        button.classList.toggle('is-active', Boolean(isActive));
+    });
+    if (open) {
+        document.getElementById(panelId).classList.add('is-open');
+    }
+    mapContainer.classList.toggle('has-open-panel', Boolean(open));
+}
+
+mobilePanelButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        if (document.getElementById('details-panel').classList.contains('is-open')) {
+            clearEventSelection();
+        }
+        setMobilePanel(button.dataset.panel);
+    });
+});
+document.querySelectorAll('.panel-close').forEach(button => {
+    button.addEventListener('click', () => {
+        clearEventSelection();
+        setMobilePanel(null);
+    });
+});
+
+function enableMobilePanelDragging(panelId, handleId) {
+    const panel = document.getElementById(panelId);
+    const handle = document.getElementById(handleId);
+    const snapRatios = [0.35, 0.62, 1];
+    let activePointerId = null;
+    let startY = 0;
+    let startHeight = 0;
+    let lastY = 0;
+    let lastTime = 0;
+    let velocity = 0;
+
+    handle.addEventListener('pointerdown', event => {
+        if (!window.matchMedia('(max-width: 900px)').matches ||
+            event.button !== 0 ||
+            event.target.closest('button')) {
+            return;
+        }
+
+        activePointerId = event.pointerId;
+        startY = event.clientY;
+        lastY = event.clientY;
+        lastTime = event.timeStamp;
+        startHeight = panel.getBoundingClientRect().height;
+        velocity = 0;
+        panel.style.setProperty('--panel-height', `${startHeight}px`);
+        handle.setPointerCapture(event.pointerId);
+        panel.classList.add('is-dragging');
+    });
+
+    handle.addEventListener('pointermove', event => {
+        if (event.pointerId !== activePointerId) {
+            return;
+        }
+
+        const deltaTime = event.timeStamp - lastTime;
+        if (deltaTime > 0) {
+            velocity = (event.clientY - lastY) / deltaTime;
+        }
+        lastY = event.clientY;
+        lastTime = event.timeStamp;
+
+        const maxHeight = Math.max(180, panel.parentElement.clientHeight - 180);
+        const height = Math.max(180, Math.min(maxHeight, startHeight + startY - event.clientY));
+        panel.style.setProperty('--panel-height', `${height}px`);
+    });
+
+    const finishDragging = event => {
+        if (event.pointerId !== activePointerId) {
+            return;
+        }
+
+        activePointerId = null;
+        panel.classList.remove('is-dragging');
+        const maxHeight = Math.max(180, panel.parentElement.clientHeight - 180);
+        const dragDistance = event.clientY - startY;
+        const momentum = Math.abs(dragDistance) > 40
+            ? Math.max(-0.8, Math.min(0.8, velocity)) * 100
+            : 0;
+        const projectedHeight = Math.max(
+            180,
+            Math.min(maxHeight, panel.getBoundingClientRect().height - momentum)
+        );
+        const snapHeights = snapRatios.map(ratio => Math.min(maxHeight, maxHeight * ratio));
+        const snapHeight = snapHeights.reduce((closest, height) =>
+            Math.abs(height - projectedHeight) < Math.abs(closest - projectedHeight)
+                ? height
+                : closest
+        );
+        panel.style.setProperty('--panel-height', `${snapHeight}px`);
+    };
+
+    handle.addEventListener('pointerup', finishDragging);
+    handle.addEventListener('pointercancel', finishDragging);
+}
+
+enableMobilePanelDragging('events-panel', 'events-header');
+enableMobilePanelDragging('details-panel', 'details-header');
+
+function clearEventSelection() {
+    selectEvent(null);
+    setSelectedEvent(null);
+    detailsContainer.innerHTML = '<p>Select an event</p>';
+    render();
+}
+
+document.getElementById('events-back-to-top').addEventListener('click', () => {
+    const eventsPanel = document.getElementById('events-panel');
+    if (window.matchMedia('(max-width: 900px)').matches) {
+        eventsPanel.scrollTo({top: 0, behavior: 'smooth'});
+    } else {
+        document.getElementById('events').scrollTo({top: 0, behavior: 'smooth'});
+    }
+});
+
+const eventsPanel = document.getElementById('events-panel');
+const backToTopButton = document.getElementById('events-back-to-top');
+
+eventsPanel.addEventListener('scroll', () => {
+    if (!window.matchMedia('(max-width: 900px)').matches) {
+        return;
+    }
+
+    backToTopButton.hidden = eventsPanel.scrollTop <= 0;
+});
+
+const addressPanel = document.getElementById('address-panel');
+const addressReopen = document.getElementById('address-reopen');
+
+document.getElementById('address-close')?.addEventListener('click', () => {
+    addressPanel.hidden = true;
+    addressReopen.hidden = false;
+});
+
+addressReopen?.addEventListener('click', () => {
+    addressPanel.hidden = false;
+    addressReopen.hidden = true;
+});

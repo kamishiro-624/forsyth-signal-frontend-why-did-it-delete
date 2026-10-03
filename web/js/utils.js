@@ -34,7 +34,9 @@ export function getCategoryName(category) {
         government: 'Government',
         education: 'Education',
         transportation: 'Transportation',
-        community: 'Community'
+        community: 'Community',
+        'public-notice': 'Public notice',
+        schools: 'School'
     };
 
     return names[category] || 'Other';

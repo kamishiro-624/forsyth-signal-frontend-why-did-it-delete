@@ -9,9 +9,37 @@ let currentState = 'upcoming';
 let currentCategory = 'all';
 let currentSearch = '';
 let selectedEventId = null;
+let searchableEvents = [];
+let visibleEvents = [];
+let renderedEventCount = 0;
+const EVENT_BATCH_SIZE = 40;
 
 export function setEvents(events) {
-    allEvents = events.map(event => ({...event, state: getEventState(event)}));
+    const idCounts = new Map();
+    for (const [index, event] of events.entries()) {
+        const id = String(event.id ?? `event-${index}`);
+        idCounts.set(id, (idCounts.get(id) || 0) + 1);
+    }
+
+    const idOccurrences = new Map();
+    allEvents = events.map((event, index) => {
+        const rawId = String(event.id ?? `event-${index}`);
+        const occurrence = idOccurrences.get(rawId) || 0;
+        idOccurrences.set(rawId, occurrence + 1);
+
+        return {
+            ...event,
+            id: idCounts.get(rawId) > 1 ? `${rawId}::${occurrence}` : rawId,
+            state: getEventState(event)
+        };
+    });
+    searchableEvents = allEvents.map(event => [
+        event.title,
+        event.category,
+        event.location,
+        event.description,
+        event.summary
+    ].map(value => String(value ?? '').toLowerCase()).join('\n'));
 }
 
 export function getEvents() {
@@ -27,12 +55,13 @@ export function selectEvent(id) {
 }
 
 export function filterEvents() {
-    return allEvents.filter(event => {
+    const searchTerms = currentSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+
+    return allEvents.filter((event, index) => {
         const stateMatches = event.state === currentState;
         const categoryMatches = currentCategory === 'all' || event.category === currentCategory;
-
-        const search = currentSearch.toLowerCase();
-        const searchMatches = !search || event.title?.toLowerCase().includes(search) || event.category?.toLowerCase().includes(search) || event.location?.toLowerCase().includes(search) || event.description?.toLowerCase().includes(search) || event.summary?.toLowerCase().includes(search);
+        const searchText = searchableEvents[index];
+        const searchMatches = searchTerms.every(term => searchText.includes(term));
 
         return (stateMatches && categoryMatches && searchMatches);
     });
@@ -51,13 +80,16 @@ export function setSearch(search) {
 }
 
 export function renderEvents(container, countContainer, onSelect) {
-    const events = filterEvents();
+    onSelectEvent = onSelect;
+    visibleEvents = filterEvents();
 
-    countContainer.textContent = `${events.length} event${events.length === 1 ? '' : 's'}`;
+    countContainer.textContent = `${visibleEvents.length} event${visibleEvents.length === 1 ? '' : 's'}`;
 
     container.innerHTML = '';
+    container.scrollTop = 0;
+    renderedEventCount = 0;
 
-    if (events.length === 0) {
+    if (visibleEvents.length === 0) {
         container.innerHTML = `
             <div class='empty'>
                 No ${currentState} events found :(
@@ -66,14 +98,30 @@ export function renderEvents(container, countContainer, onSelect) {
         return;
     }
 
-    for (const event of events) {
+    const selectedIndex = visibleEvents.findIndex(event => event.id === selectedEventId);
+    if (selectedIndex >= EVENT_BATCH_SIZE) {
+        const [selectedEvent] = visibleEvents.splice(selectedIndex, 1);
+        visibleEvents.unshift(selectedEvent);
+    }
+
+    appendEventBatch(container, countContainer);
+    if (selectedIndex >= 0) {
+        const selectedCard = container.querySelector('.event.is-selected');
+        selectedCard?.scrollIntoView({block: 'nearest'});
+    }
+}
+
+function appendEventBatch(container, countContainer) {
+    const end = Math.min(renderedEventCount + EVENT_BATCH_SIZE, visibleEvents.length);
+    const fragment = document.createDocumentFragment();
+
+    for (let index = renderedEventCount; index < end; index++) {
+        const event = visibleEvents[index];
         const element = document.createElement('article');
-        element.className = 'event';
-
-        if (event.id === selectedEventId) {
-            element.classList.add('is-selected');
-        }
-
+        element.className = event.id === selectedEventId ? 'event is-selected' : 'event';
+        element.setAttribute('role', 'button');
+        element.setAttribute('aria-pressed', String(event.id === selectedEventId));
+        element.dataset.eventIndex = String(index);
         element.tabIndex = 0;
 
         element.innerHTML = `
@@ -115,24 +163,65 @@ export function renderEvents(container, countContainer, onSelect) {
                 ${event.state}
             </div>
 
+            <div class='event-details-hint'>
+                View details <span aria-hidden='true'>→</span>
+            </div>
+
         `;
 
-        element.addEventListener('click', () => onSelect(event));
+        fragment.appendChild(element);
+    }
 
-        element.addEventListener('keydown', eventKey => {
-            if (
-                eventKey.key === 'Enter' ||
-                eventKey.key === ' '
-            ) {
+    container.appendChild(fragment);
+    renderedEventCount = end;
+    countContainer.textContent = renderedEventCount < visibleEvents.length
+        ? `${renderedEventCount} of ${visibleEvents.length} events`
+        : `${visibleEvents.length} event${visibleEvents.length === 1 ? '' : 's'}`;
+}
 
-                eventKey.preventDefault();
+let onSelectEvent = () => {};
 
-                onSelect(event);
+function appendEventsNearBottom(event) {
+    if (renderedEventCount >= visibleEvents.length) {
+        return;
+    }
 
-            }
+    const container = event.currentTarget;
+    if (container.id === 'events-panel') {
+        if (event.target !== container) {
+            return;
+        }
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
+            appendEventBatch(document.getElementById('events'), document.getElementById('event-count'));
+        }
+        return;
+    }
 
-        });
-
-        container.appendChild(element);
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
+        appendEventBatch(container, document.getElementById('event-count'));
     }
 }
+
+document.getElementById('events')?.addEventListener('scroll', appendEventsNearBottom);
+document.getElementById('events-panel')?.addEventListener('scroll', appendEventsNearBottom);
+
+document.getElementById('events')?.addEventListener('click', event => {
+    const index = Number(event.target.closest('.event')?.dataset.eventIndex);
+    const selected = visibleEvents[index];
+    if (selected) {
+        onSelectEvent(selected);
+    }
+});
+
+document.getElementById('events')?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+    }
+
+    const index = Number(event.target.closest('.event')?.dataset.eventIndex);
+    const selected = visibleEvents[index];
+    if (selected) {
+        event.preventDefault();
+        onSelectEvent(selected);
+    }
+});
