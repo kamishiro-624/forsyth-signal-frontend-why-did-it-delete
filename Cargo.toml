@@ -10,3 +10,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.6", features = ["fs"] }
 reqwest = { version = "0.12", features = ["json"] }
+vercel_runtime = "2"
+
+[[bin]]
+name = "events"
+path = "api/events.rs"

@@ -16,6 +16,7 @@ const SCHOOLS_URL: &str = "https://services2.arcgis.com/StQaZGYzUARPnrpL/ArcGIS/
 const PARKS_URL: &str = "https://services2.arcgis.com/StQaZGYzUARPnrpL/ArcGIS/rest/services/Park_Facility/FeatureServer/0/query";
 const ZONING_DISTRICTS_URL: &str = "https://geo.forsythco.com/gisworkflow/rest/services/Public/Zoning_Districts/FeatureServer/0/query";
 const EVENTS_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const LOCAL_EVENTS: &str = include_str!("../data/events.json");
 
 struct CachedEvents {
     loaded_at: Instant,
@@ -42,7 +43,7 @@ pub async fn get_events() -> Result<Json<Vec<Event>>, (axum::http::StatusCode, S
     Ok(Json(events))
 }
 
-async fn load_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
+pub async fn load_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
     let client = Client::new();
     let insight_urls = std::array::from_fn::<_, 5, _>(|index| format!("{INSIGHT_URL}/{index}/query"));
 
@@ -83,9 +84,7 @@ pub async fn get_layers() -> Result<Json<Value>, (axum::http::StatusCode, String
 }
 
 fn load_local_events() -> Result<Vec<Event>, (axum::http::StatusCode, String)> {
-    let file = std::fs::read_to_string("data/events.json").map_err(|error| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read data/events.json: {error}"),))?;
-
-    serde_json::from_str(&file).map_err(|error| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse data/events.json: {error}"),))
+    serde_json::from_str(LOCAL_EVENTS).map_err(|error| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse data/events.json: {error}"),))
 }
 
 fn bad_gateway(error: String) -> (axum::http::StatusCode, String) {

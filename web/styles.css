@@ -641,6 +641,13 @@ html, body {
     font-size: 0.8rem;
     color: var(--muted);
     background-color: var(--green-dark);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;   
+}
+
+#bdt-link {
+    color: var(--muted);
 }
 
 @media (max-width: 900px) {

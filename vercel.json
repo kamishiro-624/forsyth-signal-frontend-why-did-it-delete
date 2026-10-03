@@ -1,0 +1,18 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "functions": {
+        "api/**/*.rs": {
+            "runtime": "vercel-rust"
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/",
+            "destination": "/web/index.html"
+        },
+        {
+            "source": "/:path*",
+            "destination": "/web/:path*"
+        }
+    ]
+}

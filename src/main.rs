@@ -1,17 +1,16 @@
-mod api;
-mod models;
-mod sources;
+// IF YOU ARE RUNNING ON A LOCAL DEVELOPMENT SERVER, RUN ```cargo run --bin forsyth-signal```
 
-use axum:: {
+use axum::{
     routing::get,
     Router,
 };
 
 use tower_http::services::ServeDir;
+use forsyth_signal::api;
 
 #[tokio::main]
 async fn main() {
-    let api = Router::new().route("/events", get(api::get_events)).route("/layers", get(api::get_layers));
+    let api = Router::new().route("/api/events", get(api::get_events));
     let app = Router::new().nest("/api", api).fallback_service(ServeDir::new("web"));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
