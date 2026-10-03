@@ -13,5 +13,5 @@ reqwest = { version = "0.12", features = ["json"] }
 vercel_runtime = "2"
 
 [[bin]]
-name = "events"
+name = "main"
 path = "api/events.rs"
