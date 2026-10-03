@@ -1,6 +1,6 @@
 # Forsyth Signal
 
-Find the signal through the noise or smth idk (is this a tuff slogan??)
+Find the signal through the noise or smth idk (is this a tuff slogan??) no
 
 Anyway, this was built for the 2026 Congressional App Challenge. We're totally winning. 
 
