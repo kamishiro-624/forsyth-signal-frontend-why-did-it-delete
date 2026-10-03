@@ -10,8 +10,14 @@ import {
 
 let addressMarker = null;
 let savedAddress = null;
+let addressEvents = [];
+
+export function setAddressEvents(events) {
+    addressEvents = events;
+}
 
 export function initializeAddressSearch({input, button, results, events, onEventSelect}) {
+    addressEvents = events;
     const saved = localStorage.getItem('forsyth-signal-address');
 
     if (saved) {
@@ -60,7 +66,11 @@ export function initializeAddressSearch({input, button, results, events, onEvent
 
             addressMarker = addAddressMarker(savedAddress.latitude, savedAddress.longitude);
 
-            const nearby = findNearbyEvents(savedAddress, events);
+            const nearby = findNearbyEvents(savedAddress, addressEvents);
+
+            if (nearby.length > 0) {
+                flyTo(savedAddress.latitude, savedAddress.longitude, 14);
+            }
 
             renderImpact(results, nearby);
         } catch (error) {

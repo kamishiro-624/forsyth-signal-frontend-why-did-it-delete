@@ -3,7 +3,9 @@ import {
     addEventMarkers,
     addEventGeometry,
     selectEventGeometry,
-    flyTo
+    flyTo,
+    isMapReady,
+    setSelectedEvent
 } from './map.js';
 
 import {
@@ -21,7 +23,8 @@ import {
 } from './search.js';
 
 import {
-    initializeAddressSearch
+    initializeAddressSearch,
+    setAddressEvents
 } from './address.js';
 
 const eventsContainer = document.getElementById('events');
@@ -34,6 +37,10 @@ const addressSubmit = document.getElementById('address-submit');
 const addressResults = document.getElementById('address-results');
 
 let allEvents = [];
+let addressSearchInitialized = false;
+let mapEventsRendered = false;
+const EVENTS_CACHE_NAME = 'forsyth-signal-events-v1';
+const EVENTS_CACHE_URL = '/api/events';
 
 function render() {
     renderEvents(eventsContainer, eventCount, showEvent);
@@ -41,6 +48,7 @@ function render() {
 
 function showEvent(event) {
     selectEvent(event.id);
+    setSelectedEvent(event.id);
     detailsContainer.innerHTML = `
         <div class='details-category'>
             ${event.category}
@@ -129,10 +137,12 @@ function showEvent(event) {
         }
     `;
 
-    if (event.geometry !== null && event.geometry !== undefined) {
-        selectEventGeometry(event);
-    } else if (event.latitude !== null && event.longitude !== null) {
-        flyTo(event.latitude, event.longitude);
+    if (isMapReady()) {
+        if (event.geometry !== null && event.geometry !== undefined) {
+            selectEventGeometry(event);
+        } else if (event.latitude !== null && event.longitude !== null) {
+            flyTo(event.latitude, event.longitude);
+        }
     }
 
     render();
@@ -180,26 +190,23 @@ function escapeAttribute(value) {
     return String(value ?? '').replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-async function loadEvents() {
-    try {
-        const response = await fetch('/api/events');
+function syncMapEvents() {
+    if (!isMapReady() || mapEventsRendered || allEvents.length === 0) {
+        return;
+    }
 
-        if (!response.ok) {
-            throw new Error(`API returned: ${response.status}`);
-        }
+    mapEventsRendered = true;
+    addEventGeometry(allEvents, showEvent);
+    addEventMarkers(allEvents, showEvent);
+}
 
-        allEvents = await response.json();
+function applyEvents(events) {
+    allEvents = events;
+    setEvents(allEvents);
+    allEvents = getEvents();
+    render();
 
-        setEvents(allEvents);
-
-        allEvents = getEvents();
-
-        addEventMarkers(allEvents, showEvent);
-
-        addEventGeometry(allEvents, showEvent);
-
-        render();
-
+    if (!addressSearchInitialized) {
         initializeAddressSearch({
             input: addressSearch,
             button: addressSubmit,
@@ -207,29 +214,89 @@ async function loadEvents() {
             events: allEvents,
             onEventSelect: showEvent
         });
+        addressSearchInitialized = true;
+    } else {
+        setAddressEvents(allEvents);
+    }
+
+    if (isMapReady()) {
+        mapEventsRendered = false;
+        syncMapEvents();
+    }
+}
+
+async function loadEvents() {
+    const eventsRequest = fetch(EVENTS_CACHE_URL, {cache: 'no-cache'}).then(
+        response => ({response}),
+        error => ({error})
+    );
+
+    try {
+        if ('caches' in window) {
+            const cache = await caches.open(EVENTS_CACHE_NAME);
+            const cachedResponse = await cache.match(EVENTS_CACHE_URL);
+            if (cachedResponse) {
+                const events = await cachedResponse.json();
+                if (!Array.isArray(events)) {
+                    throw new Error('Cached event data is not an array');
+                }
+                applyEvents(events);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to read cached events:', error);
+    }
+
+    try {
+        const result = await eventsRequest;
+        if (result.error) {
+            throw result.error;
+        }
+        const response = result.response;
+
+        if (!response.ok) {
+            throw new Error(`API returned: ${response.status}`);
+        }
+
+        const responseForCache = response.clone();
+        const events = await response.json();
+        if (!Array.isArray(events)) {
+            throw new Error('Events API returned an invalid response');
+        }
+        applyEvents(events);
+        if ('caches' in window) {
+            try {
+                const cache = await caches.open(EVENTS_CACHE_NAME);
+                await cache.put(EVENTS_CACHE_URL, responseForCache);
+            } catch (error) {
+                console.error('Failed to cache events:', error);
+            }
+        }
     } catch (error) {
         console.error('Failed to load events:', error);
 
-        eventsContainer.innerHTML = `
-            <div class='error'>
-                Failed to load events.
-            </div>
-        `;
+        if (allEvents.length === 0) {
+            eventsContainer.innerHTML = `
+                <div class='error'>
+                    Failed to load events.
+                </div>
+            `;
+        }
     }
 }
 
 document.querySelectorAll('.event-tab').forEach(button => {
     button.addEventListener('click', () => {
-            document.querySelectorAll('.event-tab').forEach(other => other.classList.remove('is-active'));
-            button.classList.add('is-active');
-            setState(button.dataset.state);
-            render();
+        document.querySelectorAll('.event-tab').forEach(other => other.classList.remove('is-active'));
+        button.classList.add('is-active');
+        setState(button.dataset.state);
+        render();
     });
 });
 
 categoryFilter.addEventListener('change', () => {
-        setCategory(categoryFilter.value);
-        render();
+    setCategory(categoryFilter.value);
+    render();
 });
 
 initializeSearch({
@@ -240,9 +307,43 @@ initializeSearch({
 });
 
 window.addEventListener('location-selected', event => {
-        flyTo(event.detail.latitude, event.detail.longitude);
+    flyTo(event.detail.latitude, event.detail.longitude);
+    const locationSearch = document.getElementById('location-search');
+    locationSearch.value = event.detail.name;
+    locationSearch.parentElement.querySelector('.search-clear').hidden = false;
 });
 
-window.onMapReady = loadEvents;
+window.onMapReady = syncMapEvents;
 
-initializeMap(showEvent);
+initializeMap(showEvent).catch(error => {
+    console.error('Failed to initialize map:', error);
+    const message = document.createElement('div');
+    message.className = 'map-error';
+    message.textContent = 'The map could not be loaded. Events are still available in the list.';
+    document.getElementById('map-container').appendChild(message);
+});
+loadEvents();
+
+const mapContainer = document.getElementById('map-container');
+const mobilePanelButtons = document.querySelectorAll('#mobile-panel-controls [data-panel]');
+
+function setMobilePanel(panelId) {
+    const open = panelId && !document.getElementById(panelId).classList.contains('is-open');
+    document.querySelectorAll('.mobile-panel').forEach(panel => panel.classList.remove('is-open'));
+    mobilePanelButtons.forEach(button => {
+        const isActive = open && button.dataset.panel === panelId;
+        button.setAttribute('aria-expanded', String(Boolean(isActive)));
+        button.classList.toggle('is-active', Boolean(isActive));
+    });
+    if (open) {
+        document.getElementById(panelId).classList.add('is-open');
+    }
+    mapContainer.classList.toggle('has-open-panel', Boolean(open));
+}
+
+mobilePanelButtons.forEach(button => {
+    button.addEventListener('click', () => setMobilePanel(button.dataset.panel));
+});
+document.querySelectorAll('.panel-close').forEach(button => {
+    button.addEventListener('click', () => setMobilePanel(null));
+});

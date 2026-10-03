@@ -1,10 +1,12 @@
-import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs';
-
+let maplibregl;
 let map;
-let markers = [];
 let selectedZoningId = null;
+let mapReady = false;
+let eventFeatures = [];
+let geometryEvents = [];
 
-export function initializeMap(onEventSelect) {
+export async function initializeMap(onEventSelect) {
+    maplibregl = await import('https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs');
     map = new maplibregl.Map({
         container: 'map',
         style: {
@@ -44,6 +46,7 @@ export function initializeMap(onEventSelect) {
     );
 
     map.on('load', () => {
+        mapReady = true;
         if (window.onMapReady) {
             window.onMapReady();
         }
@@ -54,30 +57,75 @@ export function getMap() {
     return map;
 }
 
+export function isMapReady() {
+    return mapReady;
+}
+
 export function addEventMarkers(events, onEventSelect) {
-    for (const marker of markers) {
-        marker.remove();
+    eventFeatures = events.filter(event => event.latitude !== null && event.longitude !== null);
+    const data = {
+        type: 'FeatureCollection',
+        features: eventFeatures.map(event => ({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: [event.longitude, event.latitude]},
+            properties: {id: event.id}
+        }))
+    };
+
+    if (map.getSource('event-points')) {
+        map.getSource('event-points').setData(data);
+        return;
     }
 
-    markers = [];
+    map.addSource('event-points', {type: 'geojson', data});
+    map.addLayer({
+        id: 'event-points',
+        type: 'circle',
+        source: 'event-points',
+        filter: ['!=', ['get', 'id'], selectedZoningId ?? ''],
+        paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 13, 7],
+            'circle-color': '#344F1F',
+            'circle-stroke-color': '#F4991A',
+            'circle-stroke-width': 1.5
+        }
+    });
+    map.addLayer({
+        id: 'event-points-selected',
+        type: 'circle',
+        source: 'event-points',
+        filter: ['==', ['get', 'id'], selectedZoningId ?? ''],
+        paint: {
+            'circle-radius': 9,
+            'circle-color': '#F4991A',
+            'circle-stroke-color': '#263a16',
+            'circle-stroke-width': 2
+        }
+    });
 
-    for (const event of events) {
-        if (event.latitude === null || event.longitude === null) {
-            continue;
+    map.on('click', 'event-points', event => {
+        if (!event.features || event.features.length === 0) {
+            return;
         }
 
-        const marker = new maplibregl.Marker().setLngLat([event.longitude, event.latitude]).addTo(map);
-
-        marker.getElement().addEventListener('click', () => {
+        const id = event.features[0].properties.id;
+        const selected = eventFeatures.find(item => String(item.id) === String(id));
+        if (selected) {
             clearSelectedZoning();
-            onEventSelect(event);
-        });
+            onEventSelect(selected);
+        }
+    });
 
-        markers.push(marker);
-    }
+    map.on('mouseenter', 'event-points', () => {
+        map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'event-points', () => {
+        map.getCanvas().style.cursor = '';
+    });
 }
 
 export function addEventGeometry(events, onEventSelect) {
+    geometryEvents = events;
     const features = events.filter(event => event.geometry !== null && event.geometry !== undefined)
         .map(event => ({
             type: 'Feature',
@@ -128,13 +176,12 @@ export function addEventGeometry(events, onEventSelect) {
 
         const id = event.features[0].properties.id;
 
-        const selectedEvent = events.find(item => String(item.id) === String(id));
+        const selectedEvent = geometryEvents.find(item => String(item.id) === String(id));
 
         if (!selectedEvent) {
             return;
         }
 
-        selectEventGeometry(selectedEvent);
         onEventSelect(selectedEvent);
     });
 
@@ -199,6 +246,14 @@ export function selectEventGeometry(event) {
     }
 
     zoomToGeometry(event.geometry);
+}
+
+export function setSelectedEvent(id) {
+    selectedZoningId = id;
+    if (mapReady && map.getLayer('event-points')) {
+        map.setFilter('event-points', ['!=', ['get', 'id'], id]);
+        map.setFilter('event-points-selected', ['==', ['get', 'id'], id]);
+    }
 }
 
 function clearSelectedZoning() {
@@ -267,8 +322,6 @@ export function flyTo(latitude, longitude, zoom=14) {
 
 export function addAddressMarker(latitude, longitude) {
     const marker = new maplibregl.Marker({color: '#344F1F'}).setLngLat([longitude, latitude]).addTo(map);
-
-    flyTo(latitude, longitude, 14);
 
     return marker;
 }
