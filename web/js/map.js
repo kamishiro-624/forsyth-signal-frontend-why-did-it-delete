@@ -2,8 +2,8 @@ let maplibregl;
 let map;
 let selectedZoningId = null;
 let mapReady = false;
-let eventMarkers = [];
 let geometryEvents = [];
+let eventMarkers = [];
 const LAST_USER_POSITION_KEY = 'forsyth-signal-last-user-position';
 
 function getLastUserPosition() {
@@ -113,22 +113,107 @@ export function addEventMarkers(events, onEventSelect) {
     }
     eventMarkers = [];
 
+    const eventsByLocation = new Map();
     for (const event of events) {
-        if (event.latitude === null || event.longitude === null) {
+        const latitude = Number(event.latitude);
+        const longitude = Number(event.longitude);
+        if (event.latitude === null || event.longitude === null ||
+            !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
             continue;
         }
 
+        const coordinates = [longitude, latitude];
+        const key = `${longitude},${latitude}`;
+        let locationGroup = eventsByLocation.get(key);
+        if (!locationGroup) {
+            locationGroup = {events: [], coordinates};
+            eventsByLocation.set(key, locationGroup);
+        }
+        locationGroup.events.push(event);
+    }
+
+    for (const {events: eventsAtLocation, coordinates} of eventsByLocation.values()) {
+        eventsAtLocation.sort((first, second) =>
+            String(first.date || '').localeCompare(String(second.date || ''))
+        );
         const marker = new maplibregl.Marker()
-            .setLngLat([event.longitude, event.latitude])
+            .setLngLat(coordinates)
             .addTo(map);
-        marker.getElement().classList.toggle('is-selected', String(event.id) === String(selectedZoningId));
-        marker.getElement().addEventListener('click', clickEvent => {
+        const markerElement = marker.getElement();
+
+        if (eventsAtLocation.length > 1) {
+            const count = document.createElement('span');
+            count.className = 'event-marker-count';
+            count.textContent = String(eventsAtLocation.length);
+            count.setAttribute('aria-hidden', 'true');
+            markerElement.appendChild(count);
+            markerElement.setAttribute(
+                'aria-label',
+                `${eventsAtLocation.length} events at this exact location`
+            );
+            markerElement.title = `${eventsAtLocation.length} events at this exact location`;
+        }
+
+        markerElement.addEventListener('click', clickEvent => {
             clickEvent.stopPropagation();
-            onEventSelect(event);
+            if (eventsAtLocation.length === 1) {
+                onEventSelect(eventsAtLocation[0]);
+            } else {
+                showEventChooser(eventsAtLocation, onEventSelect, 'Events at this location');
+            }
         });
-        eventMarkers.push({event, marker});
+
+        markerElement.classList.toggle(
+            'is-selected',
+            eventsAtLocation.some(event => String(event.id) === String(selectedZoningId))
+        );
+        eventMarkers.push({events: eventsAtLocation, marker});
     }
 }
+
+function showEventChooser(events, onEventSelect, headingText) {
+    const panel = document.getElementById('event-group-panel');
+    const heading = document.getElementById('event-group-title');
+    const count = document.getElementById('event-group-count');
+    const list = document.getElementById('event-group-list');
+
+    heading.textContent = headingText;
+    count.textContent = `${events.length} events · ordered by date`;
+    list.replaceChildren();
+
+    for (const event of events) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'event-chooser-item';
+
+        const title = document.createElement('span');
+        title.className = 'event-chooser-title';
+        title.textContent = event.title;
+        button.appendChild(title);
+
+        const when = event.date || event.status;
+        if (when) {
+            const date = document.createElement('span');
+            date.className = 'event-chooser-date';
+            date.textContent = when;
+            button.appendChild(date);
+        }
+
+        button.addEventListener('click', () => {
+            panel.hidden = true;
+            onEventSelect(event);
+        });
+        list.appendChild(button);
+    }
+
+    panel.hidden = false;
+    list.scrollTop = 0;
+    document.getElementById('event-group-close').focus();
+}
+
+document.getElementById('event-group-close')?.addEventListener('click', () => {
+    document.getElementById('event-group-panel').hidden = true;
+});
 
 export function addEventGeometry(events, onEventSelect) {
     geometryEvents = events;
@@ -161,7 +246,7 @@ export function addEventGeometry(events, onEventSelect) {
         source: 'event-geometry',
         paint: {
             'fill-color': '#F4991A',
-            'fill-opacity': 0.20
+            'fill-opacity': 0.18
         }
     });
 
@@ -171,6 +256,7 @@ export function addEventGeometry(events, onEventSelect) {
         source: 'event-geometry',
         paint: {
             'line-color': '#F4991A',
+            'line-opacity': 0.9,
             'line-width': 2
         }
     });
@@ -180,15 +266,20 @@ export function addEventGeometry(events, onEventSelect) {
             return;
         }
 
-        const id = event.features[0].properties.id;
-
-        const selectedEvent = geometryEvents.find(item => String(item.id) === String(id));
-
-        if (!selectedEvent) {
+        const candidateIds = [...new Set(event.features.map(feature => String(feature.properties.id)))];
+        const candidates = candidateIds
+            .map(id => geometryEvents.find(item => String(item.id) === id))
+            .filter(Boolean);
+        if (candidates.length === 0) {
             return;
         }
 
-        onEventSelect(selectedEvent);
+        if (candidates.length === 1) {
+            onEventSelect(candidates[0]);
+            return;
+        }
+
+        showEventChooser(candidates, onEventSelect, 'Events in this area');
     });
 
     map.on('mouseenter', 'event-geometry-fill', () => {
@@ -257,8 +348,11 @@ export function selectEventGeometry(event) {
 export function setSelectedEvent(id) {
     clearSelectedZoning();
     selectedZoningId = id;
-    for (const {event, marker} of eventMarkers) {
-        marker.getElement().classList.toggle('is-selected', String(event.id) === String(id));
+    for (const {events, marker} of eventMarkers) {
+        marker.getElement().classList.toggle(
+            'is-selected',
+            events.some(event => String(event.id) === String(id))
+        );
     }
 }
 

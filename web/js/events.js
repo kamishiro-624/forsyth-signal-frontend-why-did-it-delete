@@ -65,12 +65,12 @@ export function setSearch(search) {
 export function renderEvents(container, countContainer, onSelect) {
     onSelectEvent = onSelect;
     visibleEvents = filterEvents();
-    renderedEventCount = 0;
 
     countContainer.textContent = `${visibleEvents.length} event${visibleEvents.length === 1 ? '' : 's'}`;
 
     container.innerHTML = '';
     container.scrollTop = 0;
+    renderedEventCount = 0;
 
     if (visibleEvents.length === 0) {
         container.innerHTML = `
@@ -81,10 +81,17 @@ export function renderEvents(container, countContainer, onSelect) {
         return;
     }
 
-    appendEventBatch(container, countContainer, onSelect);
+    appendEventBatch(container, countContainer);
+    const selectedIndex = visibleEvents.findIndex(event => event.id === selectedEventId);
+    while (selectedIndex >= renderedEventCount) {
+        appendEventBatch(container, countContainer);
+    }
+    if (selectedIndex >= 0) {
+        container.children[selectedIndex]?.scrollIntoView({block: 'nearest'});
+    }
 }
 
-function appendEventBatch(container, countContainer, onSelect) {
+function appendEventBatch(container, countContainer) {
     const end = Math.min(renderedEventCount + EVENT_BATCH_SIZE, visibleEvents.length);
     const fragment = document.createDocumentFragment();
 
@@ -136,6 +143,16 @@ function appendEventBatch(container, countContainer, onSelect) {
                 ${event.state}
             </div>
 
+            <div class='event-details-hint'>
+                View details <span aria-hidden='true'>→</span>
+            </div>
+
+            ${
+                event.id === selectedEventId
+                    ? `<div class='event-selection-indicator'>Selected for details</div>`
+                    : ''
+            }
+
         `;
 
         fragment.appendChild(element);
@@ -148,15 +165,15 @@ function appendEventBatch(container, countContainer, onSelect) {
         : `${visibleEvents.length} event${visibleEvents.length === 1 ? '' : 's'}`;
 }
 
+let onSelectEvent = () => {};
+
 document.getElementById('events')?.addEventListener('scroll', event => {
     const container = event.currentTarget;
     if (renderedEventCount < visibleEvents.length &&
         container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
-        appendEventBatch(container, document.getElementById('event-count'), onSelectEvent);
+        appendEventBatch(container, document.getElementById('event-count'));
     }
 });
-
-let onSelectEvent = () => {};
 
 document.getElementById('events')?.addEventListener('click', event => {
     const index = Number(event.target.closest('.event')?.dataset.eventIndex);

@@ -146,6 +146,9 @@ function showEvent(event) {
     }
 
     render();
+    if (window.matchMedia('(max-width: 900px)').matches) {
+        setMobilePanel('details-panel', false);
+    }
 }
 
 function getWhyItMatters(event) {
@@ -327,8 +330,10 @@ loadEvents();
 const mapContainer = document.getElementById('map-container');
 const mobilePanelButtons = document.querySelectorAll('#mobile-panel-controls [data-panel]');
 
-function setMobilePanel(panelId) {
-    const open = panelId && !document.getElementById(panelId).classList.contains('is-open');
+function setMobilePanel(panelId, toggle = true) {
+    const open = panelId && (
+        !toggle || !document.getElementById(panelId).classList.contains('is-open')
+    );
     document.querySelectorAll('.mobile-panel').forEach(panel => panel.classList.remove('is-open'));
     mobilePanelButtons.forEach(button => {
         const isActive = open && button.dataset.panel === panelId;
@@ -346,4 +351,7 @@ mobilePanelButtons.forEach(button => {
 });
 document.querySelectorAll('.panel-close').forEach(button => {
     button.addEventListener('click', () => setMobilePanel(null));
+});
+document.getElementById('events-back-to-top').addEventListener('click', () => {
+    document.getElementById('events').scrollTo({top: 0, behavior: 'smooth'});
 });

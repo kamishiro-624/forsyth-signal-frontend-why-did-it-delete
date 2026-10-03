@@ -26,6 +26,9 @@
                     <h2>Events</h2>
                     <button class="panel-close" type="button" aria-label="Close events panel">×</button>
                 </div>
+                <div class="mobile-scroll-hint" aria-hidden="true">
+                    Swipe or scroll to browse <span>↓</span>
+                </div>
 
                 <div id="event-tabs">
                     <button class="event-tab is-active" data-state="upcoming">Upcoming</button>
@@ -51,7 +54,10 @@
                     <button class="search-clear" type="button" aria-label="Clear event search" hidden>×</button>
                 </div>
                 <div id="event-count" role="status" aria-live="polite"></div>
-                <div id="events"></div>
+                <div id="event-list-container">
+                    <div id="events"></div>
+                    <button id="events-back-to-top" type="button">↑ Back to top</button>
+                </div>
             </aside>
 
             <section id="map-container">
@@ -82,6 +88,17 @@
                     <div id="address-results"></div>
                 </div>
 
+                <section id="event-group-panel" aria-labelledby="event-group-title" hidden>
+                    <header class="event-group-header">
+                        <div>
+                            <h2 id="event-group-title"></h2>
+                            <div id="event-group-count"></div>
+                        </div>
+                        <button id="event-group-close" type="button" aria-label="Close event list">×</button>
+                    </header>
+                    <div id="event-group-list"></div>
+                </section>
+
                 <div id="map"></div>
             </section>
 
@@ -89,6 +106,9 @@
                 <div id="details-header">
                     <h2>Details</h2>
                     <button class="panel-close" type="button" aria-label="Close details panel">×</button>
+                </div>
+                <div class="mobile-scroll-hint" aria-hidden="true">
+                    Swipe or scroll for full details <span>↓</span>
                 </div>
 
                 <div id="details">
