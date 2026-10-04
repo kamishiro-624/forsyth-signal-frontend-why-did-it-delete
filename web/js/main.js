@@ -71,6 +71,38 @@ function showEvent(event, source = 'list', mapLocation = null) {
         searchInput.parentElement.querySelector('.search-clear').hidden = true;
     }
 
+    const location = String(event.location ?? event.address ?? '').trim();
+
+    const hasCoordinates = event.latitude != null && event.longitude != null && String(event.latitude).trim() !== '' && String(event.longitude).trim() !== '' && Number.isFinite(Number(event.latitude)) && Number.isFinite(Number(event.longitude));
+
+    let mapsUrl = '';
+
+    if (hasCoordinates) {
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
+    } else if (location) {
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+    }
+
+    let calendarUrl = '';
+    const start = new Date(event.date);
+
+    if (event.state === 'upcoming' && event.date && !Number.isNaN(start.getTime())) {
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        const toGoogleDate = date => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+
+        const calendarUrlObject = new URL('https://calendar.google.com/calendar/render');
+
+        calendarUrlObject.search = new URLSearchParams({
+            action: 'TEMPLATE',
+            text: event.title,
+            dates: `${toGoogleDate(start)}/${toGoogleDate(end)}`,
+            location,
+            details: event.description ?? '',
+        }).toString();
+
+        calendarUrl = calendarUrlObject.href;
+    }
+
     detailsContainer.innerHTML = `
         <div class='details-category'>
             ${event.category}
@@ -141,6 +173,38 @@ function showEvent(event, source = 'list', mapLocation = null) {
                         <div>
                             ${escapeHtml(event.date)}
                         </div>
+                    </div>
+                `
+                : ''
+        }
+
+        ${
+            mapsUrl || calendarUrl
+                ? `
+                    <div class='event-actions'>
+                        ${
+                            mapsUrl
+                                ? `
+                                    <a href='${escapeAttribute(mapsUrl)}'
+                                    target='_blank'
+                                    rel='noopener noreferrer'>
+                                        Open in Google Maps
+                                    </a>
+                                `
+                                : ''
+                        }
+
+                        ${
+                            calendarUrl
+                                ? `
+                                    <a href='${escapeAttribute(calendarUrl)}'
+                                    target='_blank'
+                                    rel='noopener noreferrer'>
+                                        Add to Google Calendar
+                                    </a>
+                                `
+                                : ''
+                        }
                     </div>
                 `
                 : ''

@@ -258,6 +258,21 @@ html, body {
     border-color: var(--green);
 }
 
+.event-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.event-actions a {
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.4rem;
+    background: #1f5f4a;
+    color: white;
+    font: inherit;
+    text-decoration: none;
+}
+
 .maplibregl-marker {
     cursor: pointer;
 }
