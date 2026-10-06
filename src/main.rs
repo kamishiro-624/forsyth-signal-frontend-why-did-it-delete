@@ -10,7 +10,7 @@ use forsyth_signal::api;
 
 #[tokio::main]
 async fn main() {
-    let api = Router::new().route("/api/events", get(api::get_events));
+    let api = Router::new().route("/events", get(api::get_events));
     let app = Router::new().nest("/api", api).fallback_service(ServeDir::new("web"));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();

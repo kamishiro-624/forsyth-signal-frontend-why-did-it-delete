@@ -185,7 +185,8 @@ function showEvent(event, source = 'list', mapLocation = null) {
                         ${
                             mapsUrl
                                 ? `
-                                    <a href='${escapeAttribute(mapsUrl)}'
+                                    <a class='event-action-link'
+                                    href='${escapeAttribute(mapsUrl)}'
                                     target='_blank'
                                     rel='noopener noreferrer'>
                                         Open in Google Maps
@@ -197,7 +198,8 @@ function showEvent(event, source = 'list', mapLocation = null) {
                         ${
                             calendarUrl
                                 ? `
-                                    <a href='${escapeAttribute(calendarUrl)}'
+                                    <a class='event-action-link event-action-link--calendar'
+                                    href='${escapeAttribute(calendarUrl)}'
                                     target='_blank'
                                     rel='noopener noreferrer'>
                                         Add to Google Calendar
@@ -214,8 +216,8 @@ function showEvent(event, source = 'list', mapLocation = null) {
             event.source_url
                 ? `
                     <div class='details-section'>
-                        <a href='${escapeAttribute(event.source_url)}' target='_blank' rel='noopener noreferrer'>
-                            Official source →
+                        <a class='details-source-link' href='${escapeAttribute(event.source_url)}' target='_blank' rel='noopener noreferrer'>
+                            Official Source →
                         </a>
                     </div>
                 `
