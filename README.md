@@ -40,18 +40,18 @@ To test mock events/details screen when the backend is being blocked by network 
   const mockEvents = [
     {
       id: "mock-001",
-      title: "Sample Planning Commission Hearing",
+      title: "Octavius' 10th Birthday!",
       category: "development",
       state: "upcoming",
       status: "Scheduled",
       date: futureDate(7),
-      location: "Somewhere in Forsyth ig",
+      location: "Octavius' House",
       latitude: 34.207,
       longitude: -84.14,
-      summary: "A sample public hearing about a proposed neighborhood development.",
-      description: "The commission will discuss the proposal, hear public comments, and consider next steps.",
-      why_it_matters: "Residents can learn about the proposal and share feedback before a decision is made. Or not.",
-      source_name: "Mock source",
+      summary: "A birthday party celebration for Octavius, who is turning 10 today!",
+      description: "Join us for burgers, lawn games, and birthday cake as we celebrate Octavius turning 10! We will be outdoors, so wear comfortable casual clothes.",
+      why_it_matters: "It really doesn't.",
+      source_name: "OctaviusNews",
       source_url: "",
       geometry: null
     }
