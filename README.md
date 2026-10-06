@@ -29,3 +29,42 @@ Here's the basic outline of the project
 If you are running this project, you will need rust installed. To open the project on a local development server, run the following in the terminal:
 
 ```cargo run --bin forsyth-signal```
+
+### TESTING
+To test mock events/details screen when the backend is being blocked by network restrictions, run this in console
+```
+(async () => {
+  const futureDate = days =>
+    new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+  const mockEvents = [
+    {
+      id: "mock-001",
+      title: "Sample Planning Commission Hearing",
+      category: "development",
+      state: "upcoming",
+      status: "Scheduled",
+      date: futureDate(7),
+      location: "Somewhere in Forsyth ig",
+      latitude: 34.207,
+      longitude: -84.14,
+      summary: "A sample public hearing about a proposed neighborhood development.",
+      description: "The commission will discuss the proposal, hear public comments, and consider next steps.",
+      why_it_matters: "Residents can learn about the proposal and share feedback before a decision is made. Or not.",
+      source_name: "Mock source",
+      source_url: "",
+      geometry: null
+    }
+  ];
+
+  const cache = await caches.open("forsyth-signal-events-v1");
+  await cache.put(
+    "/api/events",
+    new Response(JSON.stringify(mockEvents), {
+      headers: { "Content-Type": "application/json" }
+    })
+  );
+
+  location.reload();
+})();
+```
