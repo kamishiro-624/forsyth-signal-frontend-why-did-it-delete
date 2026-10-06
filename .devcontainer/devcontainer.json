@@ -1,15 +1,6 @@
 {
   "name": "Rust Codespace",
-  "image": "://microsoft.com",
-  "features": {
-    "ghcr.io/devcontainers/features/rust:1": {
-      "version": "latest",
-      "profile": "minimal",
-      "targets": "aarch64-unknown-linux-gnu",
-      "components": "rust-analyzer,rust-src,rustfmt,clippy"
-    },
-    "ghcr.io/lee-orr/rusty-dev-containers/cargo-web:0": {}
-  },
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -17,5 +8,6 @@
         "tamasfe.even-better-toml"
       ]
     }
-  }
+  },
+  "forwardPorts": [8080]
 }
