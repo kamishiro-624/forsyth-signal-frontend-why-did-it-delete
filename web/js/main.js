@@ -7,7 +7,7 @@ import {
     flyTo,
     isMapReady,
     setSelectedEvent
-} from './map.js?v=group-switch-selection';
+} from './map.js?v=forsyth-county-boundary';
 
 import {
     setEvents,
