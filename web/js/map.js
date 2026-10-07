@@ -94,6 +94,30 @@ export async function initializeMap(onEventSelect) {
     }
 
     map.on('load', () => {
+        map.addSource('forsyth-county-boundary', {
+            type: 'geojson',
+            data: 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query?where=GEOID%3D%2713117%27&outFields=NAME%2CGEOID&returnGeometry=true&outSR=4326&f=geojson'
+        });
+        map.addLayer({
+            id: 'forsyth-county-boundary-fill',
+            type: 'fill',
+            source: 'forsyth-county-boundary',
+            paint: {
+                'fill-color': '#344F1F',
+                'fill-opacity': 0.08
+            }
+        });
+        map.addLayer({
+            id: 'forsyth-county-boundary-outline',
+            type: 'line',
+            source: 'forsyth-county-boundary',
+            paint: {
+                'line-color': '#344F1F',
+                'line-opacity': 0.65,
+                'line-width': 2.5
+            }
+        });
+
         mapReady = true;
         if (window.onMapReady) {
             window.onMapReady();
