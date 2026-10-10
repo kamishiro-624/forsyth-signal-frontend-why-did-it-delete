@@ -15,3 +15,7 @@ vercel_runtime = "2"
 [[bin]]
 name = "main"
 path = "api/events.rs"
+
+[[bin]]
+name = "schools"
+path = "api/schools.rs"
