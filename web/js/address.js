@@ -138,7 +138,24 @@ async function geocodeAddress(query) {
 
 
 function findNearbyEvents(address, events) {
-    return events.filter(event => event.latitude !== null && event.longitude !== null).map(event => ({event, distance: distanceMiles(address.latitude, address.longitude, event.latitude, event.longitude)})).filter(item => item.distance <= 2).sort((a, b) => a.distance - b.distance);
+    return events.filter(isActiveOrProposedZoning).filter(event => event.latitude !== null && event.longitude !== null).map(event => ({event,
+        distance: distanceMiles(
+            address.latitude,
+            address.longitude,
+            event.latitude,
+            event.longitude
+        )
+    })).filter(item => item.distance <= 2).sort((a, b) => a.distance - b.distance);
+}
+
+function isActiveOrProposedZoning(event) {
+    const title = String(event.title ?? '').trim();
+    const zoningText = `${title} ${event.description ?? ''}`;
+    const isZoning = /\bzoning\b/i.test(zoningText) || /^ZA[\s-]*\d/i.test(title);
+    const status = String(event.status ?? '').toLowerCase();
+    const isActiveOrProposed = /\b(active|proposed)\b/.test(status);
+
+    return event.category === 'development' && isZoning && isActiveOrProposed;
 }
 
 function renderImpact(container, nearby) {
@@ -146,9 +163,9 @@ function renderImpact(container, nearby) {
         container.innerHTML = `
             <div class='address-result'>
                 <strong>
-                    No nearby events
+                    No active or proposed zoning nearby
                 </strong>
-                Nothing currently recorded
+                No active or proposed zoning cases are recorded
                 within 2 miles of this address.
             </div>
         `;
@@ -163,7 +180,7 @@ function renderImpact(container, nearby) {
     let html = `
         <div class='impact-heading'>
             ${nearby.length}
-            nearby event${nearby.length === 1 ? '' : 's'}
+            nearby active or proposed zoning case${nearby.length === 1 ? '' : 's'}
         </div>
     `;
 
