@@ -316,7 +316,8 @@ export function addEventGeometry(events, onEventSelect) {
             type: 'Feature',
             geometry: event.geometry,
             properties: {
-                id: event.id
+                id: event.id,
+                active_proposed_zoning: isActiveProposedZoning(event)
             }
         }));
 
@@ -349,6 +350,8 @@ export function addEventGeometry(events, onEventSelect) {
                 'case',
                 ['boolean', ['feature-state', 'selected'], false],
                 '#344F1F',
+                ['boolean', ['get', 'active_proposed_zoning'], false],
+                '#C2413A',
                 '#F4991A'
             ],
             'fill-opacity': [
@@ -369,6 +372,8 @@ export function addEventGeometry(events, onEventSelect) {
                 'case',
                 ['boolean', ['feature-state', 'selected'], false],
                 '#344F1F',
+                ['boolean', ['get', 'active_proposed_zoning'], false],
+                '#C2413A',
                 '#F4991A'
             ],
             'line-opacity': 0.9,
@@ -400,6 +405,17 @@ export function addEventGeometry(events, onEventSelect) {
     map.on('mouseleave', 'event-geometry-fill', () => {
         map.getCanvas().style.cursor = '';
     });
+}
+
+function isActiveProposedZoning(event) {
+    if (event.category !== 'development') {
+        return false;
+    }
+
+    const title = String(event.title ?? '').trim();
+    const zoningText = `${title} ${event.description ?? ''}`;
+    const isZoning = /\bzoning\b/i.test(zoningText) || /^ZA[\s-]*\d/i.test(title);
+    return isZoning && /\b(active|proposed)\b/i.test(String(event.status ?? ''));
 }
 
 export function selectEventGeometry(event, {fitBounds = true} = {}) {
