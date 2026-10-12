@@ -145,19 +145,28 @@ export function addEventMarkers(events, onEventSelect) {
             continue;
         }
         const isArea = event.geometry?.type === 'Polygon' || event.geometry?.type === 'MultiPolygon';
-        if (isArea) {
+        const isZoningArea = isArea && isActiveProposedZoning(event);
+        if (isArea && !isZoningArea) {
             continue;
         }
 
-        const latitude = Number(event.latitude);
-        const longitude = Number(event.longitude);
-        if (event.latitude === null || event.longitude === null ||
-            !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        let coordinates;
+        if (isZoningArea) {
+            coordinates = getGeometryCenter(event.geometry);
+        } else {
+            const latitude = Number(event.latitude);
+            const longitude = Number(event.longitude);
+            if (event.latitude === null || event.longitude === null || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                continue;
+            }
+            coordinates = [longitude, latitude];
+        }
+
+        if (!coordinates) {
             continue;
         }
 
-        const coordinates = [longitude, latitude];
-        const key = `${longitude},${latitude}`;
+        const key = `${coordinates[0]},${coordinates[1]}`;
         let locationGroup = eventsByLocation.get(key);
         if (!locationGroup) {
             locationGroup = {events: [], coordinates};
@@ -170,7 +179,8 @@ export function addEventMarkers(events, onEventSelect) {
         eventsAtLocation.sort((first, second) =>
             String(first.date || '').localeCompare(String(second.date || ''))
         );
-        const marker = new maplibregl.Marker().setLngLat(coordinates).addTo(map);
+        const markerOptions = eventsAtLocation.some(isActiveProposedZoning) ? {color: '#C2413A'} : undefined;
+        const marker = new maplibregl.Marker(markerOptions).setLngLat(coordinates).addTo(map);
         const markerElement = marker.getElement();
         markerElement.setAttribute('role', 'button');
         markerElement.tabIndex = 0;
@@ -403,6 +413,32 @@ export function addEventGeometry(events, onEventSelect) {
     map.on('mouseleave', 'event-geometry-fill', () => {
         map.getCanvas().style.cursor = '';
     });
+}
+
+function getGeometryCenter(geometry) {
+    const points = [];
+    const collectCoordinates = coordinates => {
+        if (!Array.isArray(coordinates)) {
+            return;
+        }
+        if (coordinates.length >= 2 &&
+            Number.isFinite(coordinates[0]) && Number.isFinite(coordinates[1])) {
+            points.push(coordinates);
+            return;
+        }
+        for (const coordinate of coordinates) {
+            collectCoordinates(coordinate);
+        }
+    };
+    collectCoordinates(geometry?.coordinates);
+
+    if (points.length === 0) {
+        return null;
+    }
+
+    const longitudes = points.map(point => point[0]);
+    const latitudes = points.map(point => point[1]);
+    return [(Math.min(...longitudes) + Math.max(...longitudes)) / 2, (Math.min(...latitudes) + Math.max(...latitudes)) / 2];
 }
 
 function isActiveProposedZoning(event) {
