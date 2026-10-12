@@ -170,9 +170,7 @@ export function addEventMarkers(events, onEventSelect) {
         eventsAtLocation.sort((first, second) =>
             String(first.date || '').localeCompare(String(second.date || ''))
         );
-        const marker = new maplibregl.Marker()
-            .setLngLat(coordinates)
-            .addTo(map);
+        const marker = new maplibregl.Marker().setLngLat(coordinates).addTo(map);
         const markerElement = marker.getElement();
         markerElement.setAttribute('role', 'button');
         markerElement.tabIndex = 0;
@@ -414,8 +412,10 @@ function isActiveProposedZoning(event) {
 
     const title = String(event.title ?? '').trim();
     const zoningText = `${title} ${event.description ?? ''}`;
-    const isZoning = /\bzoning\b/i.test(zoningText) || /^ZA[\s-]*\d/i.test(title);
-    return isZoning && /\b(active|proposed)\b/i.test(String(event.status ?? ''));
+    const isZoning = /\b(?:zoning|zoned|zone|zones|rezoning|rezoned)\b|\bZA\s*#/i.test(zoningText) || /^ZA[\s-]*\d/i.test(title);
+    const status = String(event.status ?? '');
+    const isActiveOrProposed = /\b(active|proposed|processing|pending|review)\b/i.test(status);
+    return isZoning && isActiveOrProposed;
 }
 
 export function selectEventGeometry(event, {fitBounds = true} = {}) {

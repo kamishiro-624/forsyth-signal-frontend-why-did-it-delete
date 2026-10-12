@@ -138,24 +138,30 @@ async function geocodeAddress(query) {
 
 
 function findNearbyEvents(address, events) {
-    return events.filter(isActiveOrProposedZoning).filter(event => event.latitude !== null && event.longitude !== null).map(event => ({event,
-        distance: distanceMiles(
-            address.latitude,
-            address.longitude,
-            event.latitude,
-            event.longitude
-        )
-    })).filter(item => item.distance <= 2).sort((a, b) => a.distance - b.distance);
+    return events.filter(shouldIncludeAddressEvent).filter(event => event.latitude !== null && event.longitude !== null)
+        .map(event => ({
+            event,
+            distance: distanceMiles(
+                address.latitude,
+                address.longitude,
+                event.latitude,
+                event.longitude
+            )
+        })).filter(item => item.distance <= 2).sort((a, b) => a.distance - b.distance);
 }
 
-function isActiveOrProposedZoning(event) {
+function shouldIncludeAddressEvent(event) {
     const title = String(event.title ?? '').trim();
     const zoningText = `${title} ${event.description ?? ''}`;
-    const isZoning = /\bzoning\b/i.test(zoningText) || /^ZA[\s-]*\d/i.test(title);
-    const status = String(event.status ?? '').toLowerCase();
-    const isActiveOrProposed = /\b(active|proposed)\b/.test(status);
+    const mentionsZoning = /\b(?:zoning|zoned|zone|zones|rezoning|rezoned)\b|\bZA\s*#/i.test(zoningText);
+    const isZoningRecord = event.category === 'development' &&
+        (mentionsZoning || /^ZA[\s-]*\d/i.test(title));
 
-    return event.category === 'development' && isZoning && isActiveOrProposed;
+    if (!isZoningRecord) {
+        return true;
+    }
+
+    return /\b(active|proposed|processing|pending|review)\b/i.test(String(event.status ?? ''));
 }
 
 function renderImpact(container, nearby) {
@@ -163,9 +169,9 @@ function renderImpact(container, nearby) {
         container.innerHTML = `
             <div class='address-result'>
                 <strong>
-                    No active or proposed zoning nearby
+                    No nearby events
                 </strong>
-                No active or proposed zoning cases are recorded
+                Nothing currently recorded
                 within 2 miles of this address.
             </div>
         `;
@@ -180,7 +186,7 @@ function renderImpact(container, nearby) {
     let html = `
         <div class='impact-heading'>
             ${nearby.length}
-            nearby active or proposed zoning case${nearby.length === 1 ? '' : 's'}
+            nearby event${nearby.length === 1 ? '' : 's'}
         </div>
     `;
 
