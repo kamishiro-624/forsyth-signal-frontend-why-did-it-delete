@@ -2,7 +2,7 @@
 
 Find the signal through the noise or smth idk (is this a tuff slogan??) no
 
-Anyway, this was built for the 2026 Congressional App Challenge. We're totally winning. 
+This website was built for 2026 Congressional App Challenge.
 
 ## Functions
 The main purpose of Forsyth Signal is to encourage people to participate in civics. It can be hard to find information about civic meetings, where development plans are happening, and where public hearing signs are. That's why we built this web app. 
