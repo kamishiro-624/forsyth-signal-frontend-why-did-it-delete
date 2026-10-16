@@ -40,6 +40,7 @@ const addressResults = document.getElementById('address-results');
 let allEvents = [];
 let allSchools = null;
 let schoolsLoadError = false;
+let selectedSchoolId = null;
 let showingSchools = false;
 let addressSearchInitialized = false;
 let mapEventsRendered = false;
@@ -71,8 +72,11 @@ function renderSchools() {
 
     for (const school of allSchools) {
         const item = document.createElement('article');
-        item.className = 'event';
+        const isSelected = String(school.id) === selectedSchoolId;
+        item.className = isSelected ? 'event is-selected' : 'event';
         item.setAttribute('role', 'button');
+        item.setAttribute('aria-pressed', String(isSelected));
+        item.dataset.schoolId = String(school.id);
         item.tabIndex = 0;
         item.innerHTML = `
             <div class="event-category">School</div>
@@ -91,6 +95,13 @@ function renderSchools() {
 }
 
 function showSchool(school) {
+    selectedSchoolId = String(school.id);
+    eventsContainer.querySelectorAll('[data-school-id]').forEach(item => {
+        const isSelected = item.dataset.schoolId === selectedSchoolId;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-pressed', String(isSelected));
+    });
+
     const latitude = Number(school.latitude);
     const longitude = Number(school.longitude);
     if (isMapReady() && Number.isFinite(latitude) && Number.isFinite(longitude)) {
