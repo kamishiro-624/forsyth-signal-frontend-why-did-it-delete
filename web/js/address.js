@@ -12,6 +12,7 @@ import {
 let addressMarker = null;
 let savedAddress = null;
 let addressEvents = [];
+const ADDRESS_SEARCH_RADIUS_MILES = 10;
 
 export function setAddressEvents(events) {
     addressEvents = events;
@@ -147,7 +148,7 @@ function findNearbyEvents(address, events) {
                 event.latitude,
                 event.longitude
             )
-        })).filter(item => item.distance <= 2).sort((a, b) => a.distance - b.distance);
+        })).filter(item => item.distance <= ADDRESS_SEARCH_RADIUS_MILES).sort((a, b) => a.distance - b.distance);
 }
 
 function shouldIncludeAddressEvent(event) {
@@ -172,7 +173,7 @@ function renderImpact(container, nearby) {
                     No nearby events
                 </strong>
                 Nothing currently recorded
-                within 2 miles of this address.
+                within ${ADDRESS_SEARCH_RADIUS_MILES} miles of this address.
             </div>
         `;
 
@@ -213,7 +214,7 @@ function renderImpact(container, nearby) {
     if (farther.length > 0) {
         html += `
             <div class='impact-heading'>
-                Within 2 miles
+                Within ${ADDRESS_SEARCH_RADIUS_MILES} miles
             </div>
         `;
 
